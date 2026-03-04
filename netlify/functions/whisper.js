@@ -16,56 +16,57 @@ exports.handler = async function(event) {
   }
 
   try {
-    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-    if (!OPENAI_API_KEY) {
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
+    if (!GROQ_API_KEY) {
       return {
         statusCode: 500,
         headers: { 'Access-Control-Allow-Origin': '*' },
-        body: JSON.stringify({ error: 'OPENAI_API_KEY not set in environment variables' }),
+        body: JSON.stringify({ error: 'GROQ_API_KEY not set in environment variables' }),
       };
     }
 
-    // Body is JSON: { audio: base64string, mimeType: "audio/webm" }
     const { audio, mimeType } = JSON.parse(event.body);
     if (!audio) {
       return {
         statusCode: 400,
         headers: { 'Access-Control-Allow-Origin': '*' },
-        body: JSON.stringify({ error: 'No audio data provided' }),
+        body: JSON.stringify({ error: 'No audio data' }),
       };
     }
 
-    // Convert base64 to buffer
     const audioBuffer = Buffer.from(audio, 'base64');
-
-    // Build multipart/form-data manually (no external deps)
-    const boundary = '----FormBoundary' + Math.random().toString(36).slice(2);
-    const ext = mimeType === 'audio/mp4' ? 'mp4' : mimeType === 'audio/ogg' ? 'ogg' : 'webm';
+    const ext = mimeType === 'audio/mp4' ? 'm4a'
+              : mimeType === 'audio/ogg' ? 'ogg'
+              : mimeType === 'audio/wav' ? 'wav'
+              : 'webm';
     const filename = 'audio.' + ext;
+    const boundary = '----FormBoundary' + Math.random().toString(36).slice(2);
 
     const preamble = Buffer.from(
       `--${boundary}\r\n` +
       `Content-Disposition: form-data; name="file"; filename="${filename}"\r\n` +
       `Content-Type: ${mimeType || 'audio/webm'}\r\n\r\n`
     );
-    const modelPart = Buffer.from(
+    const rest = Buffer.from(
       `\r\n--${boundary}\r\n` +
       `Content-Disposition: form-data; name="model"\r\n\r\n` +
-      `whisper-1` +
+      `whisper-large-v3-turbo` +
       `\r\n--${boundary}\r\n` +
       `Content-Disposition: form-data; name="language"\r\n\r\n` +
       `ru` +
+      `\r\n--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="response_format"\r\n\r\n` +
+      `json` +
       `\r\n--${boundary}--\r\n`
     );
 
-    const body = Buffer.concat([preamble, audioBuffer, modelPart]);
+    const body = Buffer.concat([preamble, audioBuffer, rest]);
 
-    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
         'Content-Type': `multipart/form-data; boundary=${boundary}`,
-        'Content-Length': body.length.toString(),
       },
       body: body,
     });
@@ -76,16 +77,13 @@ exports.handler = async function(event) {
       return {
         statusCode: response.status,
         headers: { 'Access-Control-Allow-Origin': '*' },
-        body: JSON.stringify({ error: data.error?.message || 'Whisper API error' }),
+        body: JSON.stringify({ error: data.error?.message || 'Groq API error' }),
       };
     }
 
     return {
       statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
       body: JSON.stringify({ text: data.text }),
     };
 
