@@ -2170,7 +2170,10 @@ function aiChatHtml() {
       <div class="ai-chat-wrap">
         <div class="ai-chat-header">
           <div class="ai-chat-title">🤖 <span>AI-помощник по операциям</span></div>
-          <button id="ai-chat-close" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#666;font-size:20px;cursor:pointer;padding:4px 10px;line-height:1">×</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button id="ai-chat-clear" title="Очистить чат и начать заново" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:8px;color:#f87171;font-size:12px;font-weight:600;cursor:pointer;padding:5px 10px;line-height:1;white-space:nowrap">🗑 Очистить</button>
+            <button id="ai-chat-close" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#666;font-size:20px;cursor:pointer;padding:4px 10px;line-height:1">×</button>
+          </div>
         </div>
         <div class="ai-chat-messages" id="ai-chat-messages">
           ${msgs || '<div class="ai-msg ai-msg-assistant">Привет! Опиши свои операции — текстом, списком или загрузи скриншот банковской выписки. Я всё пойму и создам операции автоматически 👇</div>'}
@@ -2399,7 +2402,9 @@ NEW_FUND_JSON:
     // Build messages for built-in Claude API (no key needed)
     const userContent = [];
     if (imageBase64) {
-      userContent.push({ type: 'image', source: { type: 'base64', media_type: imageMediaType || 'image/jpeg', data: imageBase64 } });
+      const allowedMt = ['image/jpeg','image/png','image/gif','image/webp'];
+      const safeMt = allowedMt.includes(imageMediaType) ? imageMediaType : 'image/jpeg';
+      userContent.push({ type: 'image', source: { type: 'base64', media_type: safeMt, data: imageBase64 } });
     }
     if (text) userContent.push({ type: 'text', text });
 
@@ -2415,7 +2420,9 @@ NEW_FUND_JSON:
         const content = [];
         if (m.image && recentUserIndices.has(idx)) {
           const b64 = m.image.split(',')[1];
-          const mt = m.image.split(';')[0].split(':')[1] || 'image/jpeg';
+          const rawMt = m.image.split(';')[0].split(':')[1] || 'image/jpeg';
+          const allowedTypes = ['image/jpeg','image/png','image/gif','image/webp'];
+          const mt = allowedTypes.includes(rawMt) ? rawMt : 'image/jpeg';
           content.push({ type: 'image', source: { type: 'base64', media_type: mt, data: b64 } });
         } else if (m.image && !recentUserIndices.has(idx)) {
           // Replace old image with text placeholder so AI knows it was there
@@ -3401,6 +3408,16 @@ function bindEvents() {
   const aiConfirmBtn = document.getElementById('ai-confirm-txs');
   const aiDiscardBtn = document.getElementById('ai-discard-txs');
 
+  const aiChatClear = document.getElementById('ai-chat-clear');
+  if (aiChatClear) aiChatClear.onclick = () => {
+    if (!confirm('Очистить историю чата с AI?')) return;
+    state.aiMessages = [];
+    state.aiPendingTxs = [];
+    state.aiEditingIdx = null;
+    try { sessionStorage.removeItem('ai_chat_history'); } catch(e) {}
+    render();
+    scrollAiToBottom();
+  };
   if (aiChatClose) aiChatClose.onclick = () => {
     state.showAiChat = false; state.aiPendingTxs = [];
     document.body.style.overflow = '';
