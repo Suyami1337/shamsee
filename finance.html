@@ -4087,6 +4087,60 @@ function applyTheme() {
     if (e.target.id === 'partner-manage-bg') {
       state.showPartnerManage = null; render(); return;
     }
+
+    // ── Partner manage modal: Add partner ──
+    if (e.target.id === 'btn-pm-add') {
+      const dirKey = state.showPartnerManage;
+      if (!dirKey) return;
+      const dir = state.directions[dirKey] || DIRECTIONS[dirKey];
+      if (!dir) return;
+      if (!dir.partners) dir.partners = [];
+      dir.partners.push({ id: 'p_' + Date.now(), name: '', role: '', share: 0 });
+      if (state.directions[dirKey]) state.directions[dirKey] = dir;
+      DIRECTIONS[dirKey] = dir;
+      render();
+      return;
+    }
+
+    // ── Partner manage modal: Delete partner ──
+    const pmDel = e.target.closest('[data-pm-del]');
+    if (pmDel && state.showPartnerManage) {
+      const dirKey = state.showPartnerManage;
+      const idx = parseInt(pmDel.dataset.pmDel);
+      const dir = state.directions[dirKey] || DIRECTIONS[dirKey];
+      if (dir && dir.partners) {
+        dir.partners.splice(idx, 1);
+        DIRECTIONS[dirKey] = dir;
+        if (state.directions[dirKey]) state.directions[dirKey] = dir;
+      }
+      render();
+      return;
+    }
+
+    // ── Partner manage modal: Save ──
+    if (e.target.id === 'btn-pm-save') {
+      const dirKey = state.showPartnerManage;
+      if (!dirKey) return;
+      const dir = state.directions[dirKey] || DIRECTIONS[dirKey];
+      if (!dir || !dir.partners) return;
+      dir.partners = dir.partners.map((p, i) => {
+        const nameEl  = document.querySelector(`[data-pm-name="${i}"]`);
+        const roleEl  = document.querySelector(`[data-pm-role="${i}"]`);
+        const shareEl = document.querySelector(`[data-pm-share="${i}"]`);
+        return {
+          ...p,
+          name:  nameEl  ? nameEl.value.trim()              : p.name,
+          role:  roleEl  ? roleEl.value.trim()              : p.role,
+          share: shareEl ? parseFloat(shareEl.value) / 100  : p.share,
+        };
+      });
+      DIRECTIONS[dirKey] = dir;
+      if (state.directions[dirKey]) state.directions[dirKey] = dir;
+      saveToStorage();
+      state.showPartnerManage = null;
+      render();
+      return;
+    }
     // Open detail modal when clicking a tx-item card
     const txCard = e.target.closest('[data-tx-open]');
     if (txCard && !e.target.closest('[data-tx-edit]') && !e.target.closest('[data-tx-del]')) {
