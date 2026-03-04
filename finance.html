@@ -356,6 +356,8 @@ let state = {
   aiMessages: [],
   aiPendingTxs: [],
   aiEditingIdx: null,
+  aiActiveImage: null,  // last uploaded image - persists for follow-up questions
+  aiActiveImageMt: null,
   showFundModal: false,
   showAddFundModal: false,
   showEditFundModal: false,
@@ -2266,6 +2268,11 @@ async function sendAiMessage(text, imageBase64, imageMediaType) {
   if (!text && !imageBase64) return;
 
   // Add user message
+  // Save active image for follow-up context
+  if (imageBase64) {
+    state.aiActiveImage = imageBase64;
+    state.aiActiveImageMt = imageMediaType || 'image/jpeg';
+  }
   state.aiMessages.push({ role: 'user', text, image: imageBase64 ? `data:\${imageMediaType||'image/jpeg'};base64,\${imageBase64}` : null });
   state.aiMessages.push({ role: 'typing' });
   try { const msgsSafe = state.aiMessages.filter(m=>m.role!=='typing').map(m=>({...m, image: m.image ? '[img]' : null})); sessionStorage.setItem('ai_chat_history', JSON.stringify({ messages: msgsSafe, ts: Date.now(), projectId: _projectId })); } catch(e) {}
@@ -2401,10 +2408,13 @@ NEW_FUND_JSON:
   try {
     // Build messages for built-in Claude API (no key needed)
     const userContent = [];
-    if (imageBase64) {
+    // Use current image OR last active image for context
+    const imgData = imageBase64 || state.aiActiveImage;
+    const imgMt = imageBase64 ? (imageMediaType || 'image/jpeg') : state.aiActiveImageMt;
+    if (imgData) {
       const allowedMt = ['image/jpeg','image/png','image/gif','image/webp'];
-      const safeMt = allowedMt.includes(imageMediaType) ? imageMediaType : 'image/jpeg';
-      userContent.push({ type: 'image', source: { type: 'base64', media_type: safeMt, data: imageBase64 } });
+      const safeMt = allowedMt.includes(imgMt) ? imgMt : 'image/jpeg';
+      userContent.push({ type: 'image', source: { type: 'base64', media_type: safeMt, data: imgData } });
     }
     if (text) userContent.push({ type: 'text', text });
 
@@ -3408,12 +3418,15 @@ function bindEvents() {
     state.aiMessages = [];
     state.aiPendingTxs = [];
     state.aiEditingIdx = null;
+    state.aiActiveImage = null;
+    state.aiActiveImageMt = null;
     try { sessionStorage.removeItem('ai_chat_history'); } catch(e) {}
     render();
     scrollAiToBottom();
   };
   if (aiChatClose) aiChatClose.onclick = () => {
     state.showAiChat = false; state.aiPendingTxs = [];
+    state.aiActiveImage = null; state.aiActiveImageMt = null;
     document.body.style.overflow = '';
     render();
   };
@@ -3431,28 +3444,67 @@ function bindEvents() {
   };
   if (aiVoiceBtn2) aiVoiceBtn2.onclick = () => startVoiceInput();
   if (aiConfirmBtn) aiConfirmBtn.onclick = () => {
-    state.aiPendingTxs.forEach(tx => {
-      if (tx.type === 'transfer') {
-        const fromAcc = state.accounts[tx.fromAccount];
-        const toAcc   = state.accounts[tx.toAccount];
-        if (fromAcc && toAcc) {
-          fromAcc.balance -= tx.fromAmount || tx.amount;
-          toAcc.balance   += tx.toAmount   || tx.amount;
-          state.transactions.push({ ...tx, id: 'tr_'+Date.now()+'_'+Math.random().toString(36).slice(2), createdAt: Date.now(), isTransfer: true });
+    if (state.aiPendingTxs.length === 0) return;
+    const txsToSave = [...state.aiPendingTxs]; // snapshot before clearing
+    let added = 0;
+    const errors = [];
+    txsToSave.forEach((tx, i) => {
+      // Unique id: timestamp + index + random to avoid collisions
+      const uid = (Date.now() + i).toString() + '_' + Math.random().toString(36).slice(2,7);
+      try {
+        if (tx.type === 'transfer') {
+          const fromAcc = state.accounts[tx.fromAccount];
+          const toAcc   = state.accounts[tx.toAccount];
+          if (!fromAcc) { errors.push(`#${i+1}: счёт "${tx.fromAccount}" не найден`); return; }
+          if (!toAcc)   { errors.push(`#${i+1}: счёт "${tx.toAccount}" не найден`); return; }
+          const fromAmt = parseFloat(tx.fromAmount || tx.amount) || 0;
+          const toAmt   = parseFloat(tx.toAmount   || tx.amount) || 0;
+          fromAcc.balance -= fromAmt;
+          toAcc.balance   += toAmt;
+          state.transactions.push({
+            ...tx,
+            id: 'tr_' + uid,
+            createdAt: Date.now() + i,
+            isTransfer: true,
+            fromAmount: fromAmt,
+            toAmount: toAmt,
+            fromCurrency: tx.fromCurrency || fromAcc.currency || 'RUB',
+            toCurrency:   tx.toCurrency   || toAcc.currency   || 'RUB',
+          });
+          added++;
+        } else if (tx.type === 'income' || tx.type === 'expense') {
+          const acc = state.accounts[tx.account];
+          if (!acc) { errors.push(`#${i+1}: счёт "${tx.account}" не найден`); return; }
+          const amt = parseFloat(tx.amount) || 0;
+          if (amt <= 0) { errors.push(`#${i+1}: некорректная сумма`); return; }
+          if (tx.type === 'income')  acc.balance += amt;
+          if (tx.type === 'expense') acc.balance -= amt;
+          state.transactions.push({
+            ...tx,
+            id: uid,
+            createdAt: Date.now() + i,
+            amount: amt,
+            currency: tx.currency || acc.currency || 'RUB',
+          });
+          added++;
+        } else {
+          errors.push(`#${i+1}: неизвестный тип "${tx.type}"`);
         }
-      } else {
-        const acc = state.accounts[tx.account];
-        if (acc) {
-          if (tx.type === 'income')  acc.balance += parseFloat(tx.amount);
-          if (tx.type === 'expense') acc.balance -= parseFloat(tx.amount);
-        }
-        state.transactions.push({ ...tx, id: Date.now().toString()+'_'+Math.random().toString(36).slice(2), createdAt: Date.now() });
+      } catch(err) {
+        errors.push(`#${i+1}: ${err.message}`);
       }
     });
-    saveToStorage();
-    const cnt = state.aiPendingTxs.length;
+
+    if (added > 0) {
+      saveToStorage(); // triggers cloudSave via debounce
+    }
+
     state.aiPendingTxs = [];
-    state.aiMessages.push({ role: 'assistant', text: `✅ Сохранено ${cnt} операций!` });
+    const msg = added > 0
+      ? `✅ Сохранено ${added} операций!` + (errors.length ? `\n⚠️ Пропущено: ${errors.join('; ')}` : '')
+      : `⚠️ Ничего не сохранено. Ошибки:\n${errors.join('\n')}`;
+    state.aiMessages.push({ role: 'assistant', text: msg });
+    try { const ms = state.aiMessages.map(m=>({...m,image:m.image?'[img]':null})); sessionStorage.setItem('ai_chat_history', JSON.stringify({messages:ms,ts:Date.now(),projectId:_projectId})); } catch(e) {}
     render();
     scrollAiToBottom();
   };
