@@ -4278,152 +4278,62 @@ function applyTheme() {
 let _voiceRecognition = null;
 let _voiceActive = false;
 
-async function startVoiceInput() {
+function startVoiceInput() {
   const btn = document.getElementById('ai-voice-btn');
+  const inp = document.getElementById('ai-text-input');
 
-  // If already active — stop manually
+  function btnOn()  { if (btn) { btn.textContent='🔴'; btn.style.background='rgba(239,68,68,0.2)'; btn.style.color='#f87171'; } }
+  function btnOff() { if (btn) { btn.textContent='🎤'; btn.style.background=''; btn.style.color=''; } }
+
   if (_voiceActive) {
     _voiceRecognition && _voiceRecognition.stop();
-    _voiceActive = false;
-    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = ''; }
     return;
   }
 
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    alert('Голосовой ввод работает только в Chrome. Открой сайт в Chrome.');
-    return;
-  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { alert('Голосовой ввод не поддерживается в этом браузере'); return; }
 
-  // Check microphone permission first
-  if (navigator.permissions) {
-    navigator.permissions.query({ name: 'microphone' }).then(result => {
-      if (result.state === 'denied') {
-        alert('Доступ к микрофону запрещён. Разреши в настройках браузера: 🔒 → Микрофон → Разрешить');
-        return;
-      }
-    }).catch(() => {});
-  }
-
-  _voiceRecognition = new SpeechRecognition();
-  _voiceRecognition.lang = 'ru-RU';
-  _voiceRecognition.continuous = false;   // auto-stop after pause
-  _voiceRecognition.interimResults = true;
-  _voiceRecognition.maxAlternatives = 1;
-
-  function setBtnActive() {
-    if (!btn) return;
-    btn.textContent = '⏹';
-    btn.style.background = 'rgba(239,68,68,0.25)';
-    btn.style.borderColor = 'rgba(239,68,68,0.5)';
-    btn.style.color = '#f87171';
-    btn.title = 'Говори... (нажми чтобы остановить)';
-  }
-  function setBtnIdle() {
-    if (!btn) return;
-    btn.textContent = '🎤';
-    btn.style.background = '';
-    btn.style.borderColor = '';
-    btn.style.color = '';
-    btn.title = 'Голосовой ввод';
-  }
-
-  // Explicitly request mic permission first — forces browser dialog if not yet granted
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach(t => t.stop()); // release immediately, SpeechRecognition will reopen
-  } catch(permErr) {
-    _voiceActive = false;
-    setBtnIdle();
-    console.error('[Voice] mic permission denied:', permErr.message);
-    alert('Доступ к микрофону запрещён.\n\nЧтобы разрешить:\n1. Нажми 🔒 в адресной строке\n2. Микрофон → Разрешить\n3. Обнови страницу');
-    return;
-  }
-
-  setBtnActive();
   _voiceActive = true;
+  btnOn();
+  if (inp) inp.placeholder = '🎤 Говорите...';
 
-  let finalTranscript = '';
-  let silenceTimer = null;
+  const rec = new SR();
+  _voiceRecognition = rec;
+  rec.lang = 'ru-RU';
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
 
-  _voiceRecognition.onstart = function() {
-    console.log('[Voice] onstart fired — mic is active');
-    const inp = document.getElementById('ai-text-input');
-    if (inp && !inp.value) inp.placeholder = '🎤 Говорите...';
-  };
+  let final = '';
 
-  _voiceRecognition.onresult = function(e) {
-    clearTimeout(silenceTimer);
-    console.log('[Voice] onresult, results count:', e.results.length);
-
+  rec.onresult = function(e) {
     let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
-      const res = e.results[i];
-      console.log('[Voice] result[' + i + ']:', res[0].transcript, 'isFinal:', res.isFinal, 'confidence:', res[0].confidence);
-      if (res.isFinal) {
-        finalTranscript += res[0].transcript + ' ';
-      } else {
-        interim += res[0].transcript;
-      }
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
     }
-    const inp = document.getElementById('ai-text-input');
-    if (inp) inp.value = finalTranscript + interim;
-
-    if (finalTranscript.trim()) {
-      silenceTimer = setTimeout(() => {
-        _voiceRecognition && _voiceRecognition.stop();
-      }, 1500);
-    }
+    if (inp) inp.value = final + interim;
   };
 
-  _voiceRecognition.onend = function() {
-    clearTimeout(silenceTimer);
+  rec.onend = function() {
     _voiceActive = false;
-    setBtnIdle();
-    console.log('[Voice] onend, finalTranscript:', JSON.stringify(finalTranscript));
-    const inp = document.getElementById('ai-text-input');
+    btnOff();
     if (inp) inp.placeholder = 'Напиши или надиктуй операцию...';
-    const text = finalTranscript.trim();
-    if (text) {
+    if (final.trim()) {
       if (inp) inp.value = '';
-      sendAiMessage(text, null);
-    } else {
-      // Show what happened
-      if (inp) inp.value = '';
-      console.warn('[Voice] no transcript captured');
+      sendAiMessage(final.trim(), null);
     }
   };
 
-  _voiceRecognition.onerror = function(e) {
-    clearTimeout(silenceTimer);
+  rec.onerror = function(e) {
     _voiceActive = false;
-    setBtnIdle();
-    console.error('[Voice] onerror:', e.error);
-    const inp = document.getElementById('ai-text-input');
+    btnOff();
     if (inp) inp.placeholder = 'Напиши или надиктуй операцию...';
-    if (e.error === 'not-allowed') {
-      alert('Доступ к микрофону запрещён.\n\nЧтобы разрешить:\n1. Нажми на 🔒 в адресной строке\n2. Найди «Микрофон»\n3. Выбери «Разрешить»\n4. Обнови страницу');
-    } else if (e.error === 'no-speech') {
-      alert('Речь не обнаружена — попробуй ещё раз и говори чётче');
-    } else if (e.error === 'network') {
-      alert('Ошибка сети при распознавании речи.');
-    } else if (e.error === 'audio-capture') {
-      alert('Микрофон не найден или недоступен. Проверь подключение микрофона.');
-    } else {
-      alert('Ошибка голосового ввода: ' + e.error);
-    }
+    if (e.error === 'not-allowed') alert('Разреши доступ к микрофону в настройках браузера');
+    else if (e.error !== 'no-speech') alert('Ошибка: ' + e.error);
   };
 
-  try {
-    console.log('[Voice] calling start()...');
-    _voiceRecognition.start();
-    console.log('[Voice] start() called OK');
-  } catch(err) {
-    _voiceActive = false;
-    setBtnIdle();
-    console.error('[Voice] start() error:', err.message);
-    alert('Ошибка запуска микрофона: ' + err.message);
-  }
+  try { rec.start(); } catch(e) { _voiceActive = false; btnOff(); }
 }
 
 function profileModalHtml() {
