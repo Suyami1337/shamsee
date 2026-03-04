@@ -147,11 +147,11 @@
   .mode-btn-sub { font-size:13px;color:#555; }
 
   /* AI Chat */
-  .ai-chat-bg { position:fixed;inset:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;overflow:hidden; }
+  .ai-chat-bg { position:fixed;inset:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;overflow:hidden;touch-action:none; }
   .ai-chat-wrap { background:rgba(12,12,22,0.99);border:1px solid rgba(255,255,255,0.1);border-radius:24px;width:100%;max-width:780px;height:90vh;max-height:900px;display:flex;flex-direction:column;overflow:hidden;position:relative; }
   .ai-chat-header { padding:18px 20px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center;flex-shrink:0; }
   .ai-chat-title { font-size:16px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px; }
-  .ai-chat-messages { flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px; }
+  .ai-chat-messages { flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch; }
   .ai-msg { max-width:85%;padding:12px 16px;border-radius:16px;font-size:14px;line-height:1.5; }
   .ai-msg-assistant { background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);color:#ddd;align-self:flex-start;border-radius:4px 16px 16px 16px; }
   .ai-msg-user { background:linear-gradient(135deg,rgba(110,231,183,0.2),rgba(59,130,246,0.2));border:1px solid rgba(110,231,183,0.2);color:#fff;align-self:flex-end;border-radius:16px 4px 16px 16px; }
@@ -2054,7 +2054,78 @@ function modalHtml() {
           <button class="btn-submit" id="btn-submit">Добавить операцию</button>
         </div>
       </div>
-    </div>`;
+      ${state.aiEditingIdx !== null ? (() => {
+        const idx = state.aiEditingIdx;
+        const tx = state.aiPendingTxs[idx];
+        if (!tx) return '';
+        const allAccounts = Object.entries(state.accounts);
+        const dirKey = tx.direction || (state.accounts[tx.account]?.direction) || Object.keys(state.directions||{})[0];
+        const catsIn  = getDirCats(dirKey,'in').map(cat=>`<option value="${cat}" ${tx.category===cat?'selected':''}>${cat}</option>`).join('');
+        const catsOut = getDirCats(dirKey,'out').map(cat=>`<option value="${cat}" ${tx.category===cat?'selected':''}>${cat}</option>`).join('');
+        const ddsCats = CATEGORIES_DDS.map(cat=>`<option value="${cat}" ${tx.category===cat?'selected':''}>${cat}</option>`).join('');
+        return `<div id="ai-edit-modal-bg" style="position:absolute;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px;border-radius:24px">
+          <div style="background:#111;border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:24px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+              <span style="font-size:16px;font-weight:700;color:#fff">✏️ Операция #${idx+1}</span>
+              <button data-ai-edit-cancel style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#666;font-size:18px;cursor:pointer;padding:2px 10px">×</button>
+            </div>
+            <div class="form-grid">
+              <div class="form-row form-row-2">
+                <div>
+                  <div class="form-label">Тип</div>
+                  <select class="form-inp" id="aie-type">
+                    <option value="income"   ${tx.type==='income'  ?'selected':''}>💚 Доход</option>
+                    <option value="expense"  ${tx.type==='expense' ?'selected':''}>🔴 Расход</option>
+                    <option value="transfer" ${tx.type==='transfer'?'selected':''}>🟡 Перевод</option>
+                  </select>
+                </div>
+                <div>
+                  <div class="form-label">Дата</div>
+                  <input type="date" class="form-inp" id="aie-date" value="${tx.date||''}">
+                </div>
+              </div>
+              <div>
+                <div class="form-label">Счёт</div>
+                <select class="form-inp" id="aie-account">
+                  ${allAccounts.map(([k,a])=>`<option value="${k}" ${tx.account===k?'selected':''}>${a.name} · ${a.currency}</option>`).join('')}
+                </select>
+              </div>
+              <div class="form-row form-row-3">
+                <div>
+                  <div class="form-label">Сумма</div>
+                  <input type="number" class="form-inp" id="aie-amount" value="${tx.amount}">
+                </div>
+                <div>
+                  <div class="form-label">Валюта</div>
+                  <select class="form-inp" id="aie-currency">
+                    ${(state.enabledCurrencies||['RUB','SAR','USDT']).map(cur=>`<option value="${cur}" ${tx.currency===cur?'selected':''}>${cur}</option>`).join('')}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <div class="form-label">Категория</div>
+                <select class="form-inp" id="aie-category">
+                  <option value="">— выбрать —</option>
+                  ${tx.type==='transfer'
+                    ? `<optgroup label="Перевод">${ddsCats}</optgroup>`
+                    : tx.type==='income'
+                      ? `<optgroup label="Доходы">${catsIn}</optgroup>`
+                      : `<optgroup label="Расходы">${catsOut}</optgroup>`
+                  }
+                  <option value="${tx.category||''}" selected style="display:none">${tx.category||''}</option>
+                </select>
+              </div>
+              <div>
+                <div class="form-label">Комментарий</div>
+                <input type="text" class="form-inp" id="aie-note" value="${escHtmlAi(tx.note||'')}">
+              </div>
+              <button class="btn-submit" data-ai-edit-save="${idx}">✓ Сохранить изменения</button>
+            </div>
+          </div>
+        </div>`;
+      })() : ''}
+    </div>
+  </div>`;
 }
 
 function ratesModalHtml() {
@@ -2108,7 +2179,7 @@ function aiChatHtml() {
   const msgs = state.aiMessages.map(m => {
     if (m.role === 'user') {
       const imgHtml = m.image ? `<img class="ai-msg-img" src="${m.image}" alt="скриншот">` : '';
-      return `<div class="ai-msg ai-msg-user">${m.text ? escHtmlAi(m.text) : ''}${imgHtml}</div>`;
+      return `<div class="ai-msg ai-msg-user">${m.text ? escHtmlAi(m.text).replace(/\n/g,'<br>') : ''}${imgHtml}</div>`;
     } else if (m.role === 'typing') {
       return `<div class="ai-msg ai-msg-assistant"><div class="ai-typing"><span></span><span></span><span></span></div></div>`;
     } else {
@@ -2133,56 +2204,6 @@ function aiChatHtml() {
       const sign = tx.type==='income' ? '+' : '-';
       const isEditing = editingIdx === i;
       const dateStr = tx.date ? (() => { const dp=(tx.date||'').split('-'); const M=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']; return dp.length===3?parseInt(dp[2])+' '+M[parseInt(dp[1])-1]:tx.date; })() : '';
-
-      if (isEditing) {
-        // Inline edit form
-        const catList = [...(state.dirCategories[tx.direction]?.in||[]), ...(state.dirCategories[tx.direction]?.out||[]), ...CATEGORIES_DDS];
-        const uniqueCats = [...new Set(catList)];
-        return `<div class="tx-item" style="margin-bottom:8px;cursor:default;flex-direction:column;gap:10px;align-items:stretch">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-            <span style="font-size:12px;font-weight:700;color:#a78bfa">#${i+1} Редактирование</span>
-            <button data-ai-edit-cancel style="background:none;border:none;color:#555;font-size:18px;cursor:pointer">×</button>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div>
-              <div style="font-size:11px;color:#555;margin-bottom:4px">Тип</div>
-              <select data-ai-edit-field="type" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#ccc;padding:6px 8px;font-size:13px">
-                <option value="income" ${tx.type==='income'?'selected':''}>💚 Доход</option>
-                <option value="expense" ${tx.type==='expense'?'selected':''}>🔴 Расход</option>
-                <option value="transfer" ${tx.type==='transfer'?'selected':''}>🟡 Перевод</option>
-              </select>
-            </div>
-            <div>
-              <div style="font-size:11px;color:#555;margin-bottom:4px">Сумма</div>
-              <input type="number" data-ai-edit-field="amount" value="${tx.amount}" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#ccc;padding:6px 8px;font-size:13px;box-sizing:border-box">
-            </div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div>
-              <div style="font-size:11px;color:#555;margin-bottom:4px">Счёт</div>
-              <select data-ai-edit-field="account" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#ccc;padding:6px 8px;font-size:13px">
-                ${allAccounts.map(([k,a])=>`<option value="${k}" ${tx.account===k?'selected':''}>${a.name}</option>`).join('')}
-              </select>
-            </div>
-            <div>
-              <div style="font-size:11px;color:#555;margin-bottom:4px">Дата</div>
-              <input type="date" data-ai-edit-field="date" value="${tx.date||''}" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#ccc;padding:6px 8px;font-size:13px;box-sizing:border-box">
-            </div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:#555;margin-bottom:4px">Категория</div>
-            <select data-ai-edit-field="category" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#ccc;padding:6px 8px;font-size:13px">
-              ${uniqueCats.map(cat=>`<option value="${cat}" ${tx.category===cat?'selected':''}>${cat}</option>`).join('')}
-              <option value="${tx.category}" ${!uniqueCats.includes(tx.category)?'selected':''}>${tx.category}</option>
-            </select>
-          </div>
-          <div>
-            <div style="font-size:11px;color:#555;margin-bottom:4px">Комментарий</div>
-            <input type="text" data-ai-edit-field="note" value="${escHtmlAi(tx.note||'')}" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#ccc;padding:6px 8px;font-size:13px;box-sizing:border-box">
-          </div>
-          <button data-ai-edit-save="${i}" style="width:100%;padding:8px;border-radius:8px;border:none;background:linear-gradient(135deg,#6ee7b7,#3b82f6);color:#000;font-weight:700;font-size:13px;cursor:pointer">✓ Сохранить</button>
-        </div>`;
-      }
 
       return `<div class="tx-item" style="margin-bottom:8px;position:relative;cursor:default">
         <div style="position:absolute;top:8px;left:12px;font-size:11px;font-weight:700;color:#444;z-index:1">#${i+1}</div>
@@ -4109,36 +4130,34 @@ document.addEventListener('click', function(e) {
     render(); return;
   }
 
-  // Edit button — open inline form
+  // Edit button — open modal
   const aiEditBtn = e.target.closest('[data-ai-edit]');
-  if (aiEditBtn && !aiEditBtn.dataset.aiEditSave && !aiEditBtn.dataset.aiEditCancel) {
+  if (aiEditBtn) {
     state.aiEditingIdx = parseInt(aiEditBtn.dataset.aiEdit);
-    render(); scrollAiToBottom(); return;
+    render(); return;
   }
 
-  // Cancel edit
-  if (e.target.closest('[data-ai-edit-cancel]')) {
+  // Cancel edit modal
+  if (e.target.closest('[data-ai-edit-cancel]') || e.target.id === 'ai-edit-modal-bg') {
     state.aiEditingIdx = null;
     render(); return;
   }
 
-  // Save edit
+  // Save edit modal
   const aiSaveBtn = e.target.closest('[data-ai-edit-save]');
   if (aiSaveBtn) {
     const idx = parseInt(aiSaveBtn.dataset.aiEditSave);
-    const card = aiSaveBtn.closest('.tx-item');
-    if (card) {
-      card.querySelectorAll('[data-ai-edit-field]').forEach(el => {
-        const field = el.dataset.aiEditField;
-        const val = el.type === 'number' ? parseFloat(el.value) : el.value;
-        state.aiPendingTxs[idx][field] = val;
-        // Update direction when account changes
-        if (field === 'account') {
-          const acc = state.accounts[val];
-          if (acc) state.aiPendingTxs[idx].direction = acc.direction;
-        }
-      });
-    }
+    const get = id => (document.getElementById(id)||{}).value || '';
+    const tx = state.aiPendingTxs[idx];
+    tx.type     = get('aie-type')     || tx.type;
+    tx.date     = get('aie-date')     || tx.date;
+    tx.account  = get('aie-account')  || tx.account;
+    tx.amount   = parseFloat(get('aie-amount')) || tx.amount;
+    tx.currency = get('aie-currency') || tx.currency;
+    tx.category = get('aie-category') || tx.category;
+    tx.note     = get('aie-note');
+    const acc = state.accounts[tx.account];
+    if (acc) tx.direction = acc.direction;
     state.aiEditingIdx = null;
     render(); return;
   }
