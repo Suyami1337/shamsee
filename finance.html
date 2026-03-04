@@ -4278,7 +4278,7 @@ function applyTheme() {
 let _voiceRecognition = null;
 let _voiceActive = false;
 
-function startVoiceInput() {
+async function startVoiceInput() {
   const btn = document.getElementById('ai-voice-btn');
 
   // If already active — stop manually
@@ -4326,6 +4326,18 @@ function startVoiceInput() {
     btn.style.borderColor = '';
     btn.style.color = '';
     btn.title = 'Голосовой ввод';
+  }
+
+  // Explicitly request mic permission first — forces browser dialog if not yet granted
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => t.stop()); // release immediately, SpeechRecognition will reopen
+  } catch(permErr) {
+    _voiceActive = false;
+    setBtnIdle();
+    console.error('[Voice] mic permission denied:', permErr.message);
+    alert('Доступ к микрофону запрещён.\n\nЧтобы разрешить:\n1. Нажми 🔒 в адресной строке\n2. Микрофон → Разрешить\n3. Обнови страницу');
+    return;
   }
 
   setBtnActive();
