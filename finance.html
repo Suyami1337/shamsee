@@ -994,7 +994,7 @@ function transactionsHtml() {
     }).join('') + `</div>`;
 
   if (!state.activeDir) {
-    const sorted = [...monthTxs()].filter(t => !t.isFundTarget && state.txTypeFilter.includes(t.type)).sort((a,b) => { const dd = new Date(b.date) - new Date(a.date); return dd !== 0 ? dd : (b.createdAt||0) - (a.createdAt||0); });
+    const sorted = [...monthTxs()].filter(t => !t.isFundTarget && (t.isTransfer || state.txTypeFilter.includes(t.type))).sort((a,b) => { const dd = new Date(b.date) - new Date(a.date); return dd !== 0 ? dd : (b.createdAt||0) - (a.createdAt||0); });
     const txHtml = sorted.length === 0
       ? `<div class="empty">Нет операций. Нажмите «+ Операция» чтобы начать!</div>`
       : sorted.slice(0,100).map(t => txItemHtml(t)).join('');
@@ -1044,11 +1044,11 @@ function transactionsHtml() {
   }).join('');
 
   const allForDir = activeAcc
-    ? monthTxs().filter(t => t.account === activeAcc)
+    ? monthTxs().filter(t => t.account === activeAcc || (t.isTransfer && (t.fromAccount === activeAcc || t.toAccount === activeAcc)))
     : monthTxs().filter(t => t.direction === state.activeDir);
 
   const filtered = allForDir.filter(t => !t.isFundTarget);
-  const sorted = [...filtered].filter(t => state.txTypeFilter.includes(t.type)).sort((a,b) => { const dd = new Date(b.date) - new Date(a.date); return dd !== 0 ? dd : (b.createdAt||0)-(a.createdAt||0); });
+  const sorted = [...filtered].filter(t => t.isTransfer || state.txTypeFilter.includes(t.type)).sort((a,b) => { const dd = new Date(b.date) - new Date(a.date); return dd !== 0 ? dd : (b.createdAt||0)-(a.createdAt||0); });
 
   const txHtml = sorted.length === 0
     ? `<div class="empty">Нет операций по этому счёту</div>`
@@ -1067,16 +1067,47 @@ function transactionsHtml() {
 }
 
 function txItemHtml(t) {
+  const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  const dp = t.date ? t.date.split('-') : [];
+  const dateStr = dp.length===3 ? `${parseInt(dp[2])} ${MONTHS_GEN[parseInt(dp[1])-1]}` : t.date;
+
+  // ── TRANSFER (unified) ──────────────────────────────────────────────────────
+  if (t.isTransfer) {
+    const fromAcc = state.accounts[t.fromAccount];
+    const toAcc   = state.accounts[t.toAccount];
+    const fromName = fromAcc ? fromAcc.name : t.fromAccount;
+    const toName   = toAcc   ? toAcc.name   : t.toAccount;
+    const sameCur  = t.fromCurrency === t.toCurrency;
+    const amtText  = sameCur
+      ? fmt(t.fromAmount, t.fromCurrency)
+      : `${fmt(t.fromAmount,t.fromCurrency)} → ${fmt(t.toAmount,t.toCurrency)}`;
+    return `
+      <div class="tx-item" data-tx-open="${t.id}" style="cursor:pointer;display:flex;align-items:center;gap:12px;padding:20px 16px;border-color:rgba(251,191,36,0.15)">
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
+          <span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;border:1px solid rgba(251,191,36,0.3);background:rgba(251,191,36,0.08);color:#fbbf24;display:inline-block;width:fit-content">🔄 ДДС</span>
+          <div style="font-size:18px;font-weight:600;color:#ccc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.category||'Перевод между счетами'}</div>
+          <div style="font-size:13px;color:#888;display:flex;align-items:center;gap:6px">
+            <span style="color:#fbbf24">${fromName}</span>
+            <span style="color:#555">→</span>
+            <span style="color:#fbbf24">${toName}</span>
+          </div>
+          ${t.note ? `<div style="font-size:13px;color:#666">${t.note}</div>` : ''}
+          <div style="font-size:13px;color:#555">${dateStr}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:15px;font-weight:700;font-family:monospace;color:#f87171">−${fmt(t.fromAmount,t.fromCurrency)}</div>
+          <div style="font-size:15px;font-weight:700;font-family:monospace;color:#93c5fd;margin-top:2px">+${fmt(t.toAmount||t.fromAmount,t.toCurrency||t.fromCurrency)}</div>
+        </div>
+      </div>`;
+  }
+
+  // ── REGULAR ─────────────────────────────────────────────────────────────────
   const acc  = state.accounts[t.account];
   const sign = (t.type === 'income' || t.type === 'dds_in') ? '+' : '-';
   const amtColor  = t.type==='income'?'#6ee7b7':t.type==='expense'?'#f87171':t.type==='dds_in'?'#93c5fd':'#fbbf24';
   const typeLabel = t.type==='income'?'Доход':t.type==='expense'?'Расход':t.type==='dds_in'?'ДДС+':'ДДС−';
   const typeBg    = t.type==='income'?'rgba(110,231,183,0.08)':t.type==='expense'?'rgba(239,68,68,0.08)':t.type==='dds_in'?'rgba(147,197,253,0.08)':'rgba(251,191,36,0.08)';
   const typeBorder= t.type==='income'?'rgba(110,231,183,0.2)':t.type==='expense'?'rgba(239,68,68,0.2)':t.type==='dds_in'?'rgba(147,197,253,0.2)':'rgba(251,191,36,0.2)';
-  // format date: "15 февраля"
-  const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
-  const dp = t.date ? t.date.split('-') : [];
-  const dateStr = dp.length===3 ? `${parseInt(dp[2])} ${MONTHS_GEN[parseInt(dp[1])-1]}` : t.date;
   const accName = acc ? acc.name : t.account;
   const sub = t.currency!=='RUB' ? `<div style="font-size:11px;color:#555;margin-top:1px">≈${fmt(toRub(t.amount,t.currency))}</div>` : '';
   return `
@@ -1767,6 +1798,12 @@ function accModalHtml() {
             </div>
           </div>
           <div style="font-size:12px;color:#888;margin-top:-8px">Если валюта одинаковая — второе поле не заполняй</div>
+          <div>
+            <div class="form-label">Категория ДДС</div>
+            <select class="form-inp" id="af-category">
+              ${CATEGORIES_DDS.map(cat => `<option value="${cat}">${cat}</option>`).join('')}
+            </select>
+          </div>
           <div>
             <div class="form-label">Комментарий</div>
             <input type="text" placeholder="Необязательно..." class="form-inp" id="af-note">
@@ -2778,6 +2815,7 @@ function bindEvents() {
     const toAmtVal   = getRawValue(document.getElementById('af-to-amount'));
     const dateVal    = (document.getElementById('af-date') || {}).value;
     const noteVal    = (document.getElementById('af-note') || {}).value || '';
+    const catVal     = (document.getElementById('af-category') || {}).value || 'Перевод между счетами';
 
     if (!fromAmtVal || parseFloat(fromAmtVal) <= 0) { alert('Введи сумму списания'); return; }
 
@@ -2791,16 +2829,24 @@ function bindEvents() {
     if (toAmt <= 0) { alert('Введи сумму зачисления'); return; }
 
     const date = dateVal || (state.activeMonth ? `${state.activeMonth}-01` : new Date().toISOString().slice(0,10));
-    const note = noteVal || `${fromAcc.name} → ${toAcc.name}`;
+    const note = noteVal || '';
     const id   = Date.now().toString();
 
     // Update balances
     fromAcc.balance -= fromAmt;
     toAcc.balance   += toAmt;
 
-    // Create two transactions
-    state.transactions.push({ id:'out_'+id, date, type:'dds_out', direction:fromAcc.direction, account:fromKey, amount:fromAmt, currency:fromAcc.currency, category:'Перевод между счетами', note, isAccTx:true });
-    state.transactions.push({ id:'in_' +id, date, type:'dds_in',  direction:toAcc.direction,   account:toKey,   amount:toAmt,   currency:toAcc.currency,   category:'Перевод между счетами', note, isAccTx:true });
+    // Create ONE unified transfer transaction
+    state.transactions.push({
+      id: 'tr_'+id,
+      date, type: 'transfer',
+      fromAccount: fromKey, toAccount: toKey,
+      fromDirection: fromAcc.direction, toDirection: toAcc.direction,
+      fromAmount: fromAmt, toAmount: toAmt,
+      fromCurrency: fromAcc.currency, toCurrency: toAcc.currency,
+      category: catVal, note, createdAt: Date.now(),
+      isTransfer: true
+    });
 
     saveToStorage();
     state.showAccModal = false;
