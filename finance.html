@@ -527,10 +527,15 @@ function monthlyData() {
 
 // ─── RENDER ────────────────────────────────────────────────────────────────
 function render() {
-  document.getElementById('header-root').innerHTML = headerHtml();
-  document.getElementById('app').innerHTML = bodyHtml();
-  bindEvents();
-  renderCharts();
+  try {
+    document.getElementById('header-root').innerHTML = headerHtml();
+    document.getElementById('app').innerHTML = bodyHtml();
+    bindEvents();
+    renderCharts();
+  } catch(e) {
+    console.error('RENDER ERROR:', e);
+    document.getElementById('app').innerHTML = '<div style="color:red;padding:40px;font-family:monospace">Ошибка рендера: ' + e.message + '<br><br>' + e.stack + '</div>';
+  }
 }
 
 function bodyHtml() {
