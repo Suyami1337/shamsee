@@ -2439,7 +2439,8 @@ NEW_FUND_JSON:
 ВАЖНО:
 - При создании новых сущностей — сначала NEW_*_JSON, потом TRANSACTIONS_JSON
 - direction счёта должен совпадать с существующим или новым направлением
-- Всегда отвечай на русском языке, кратко и по делу`;
+- Всегда отвечай на русском языке, кратко и по делу
+- JSON блоки пиши БЕЗ markdown-обёрток (без \`\`\`json и \`\`\`) — только чистый JSON сразу после метки`;
 
   try {
     // Build messages for built-in Claude API (no key needed)
@@ -2515,11 +2516,30 @@ NEW_FUND_JSON:
     let displayText = fullText;
 
     // Extract NEW_CATEGORIES_JSON
+    // Strip markdown code fences from AI response before parsing
+    function stripJsonFences(str) {
+      return str.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+    }
+    function extractJsonBlock(text, marker) {
+      if (!text.includes(marker + ':')) return null;
+      try {
+        const raw = text.split(marker + ':')[1]
+          .split(/NEW_[A-Z_]+_JSON:|TRANSACTIONS_JSON:|NEW_CATEGORIES_JSON:/)[0]
+          .trim();
+        const clean = stripJsonFences(raw);
+        const parsed = JSON.parse(clean);
+        return Array.isArray(parsed) ? parsed : null;
+      } catch(e) {
+        console.warn(marker + ' parse error:', e.message);
+        return null;
+      }
+    }
+
     if (fullText.includes('NEW_CATEGORIES_JSON:')) {
       const parts = fullText.split('NEW_CATEGORIES_JSON:');
       displayText = parts[0].trim();
       try {
-        const catJson = parts[1].split('TRANSACTIONS_JSON:')[0].trim();
+        const catJson = stripJsonFences(parts[1].split('TRANSACTIONS_JSON:')[0].trim());
         newCats = JSON.parse(catJson);
       } catch(e) {}
     }
@@ -2528,7 +2548,7 @@ NEW_FUND_JSON:
     if (fullText.includes('TRANSACTIONS_JSON:')) {
       const parts = fullText.split('TRANSACTIONS_JSON:');
       displayText = parts[0].replace('NEW_CATEGORIES_JSON:', '').trim();
-      try { parsed = JSON.parse(parts[1].trim()); } catch(e) {}
+      try { parsed = JSON.parse(stripJsonFences(parts[1].trim())); } catch(e) {}
     }
 
     // Also try to find JSON array anywhere in text
@@ -2545,32 +2565,15 @@ NEW_FUND_JSON:
       }
     }
 
+
     // Extract NEW_DIRECTION_JSON
-    let newDirs = null;
-    if (fullText.includes('NEW_DIRECTION_JSON:')) {
-      try {
-        const part = fullText.split('NEW_DIRECTION_JSON:')[1].split(/NEW_[A-Z]+_JSON:|TRANSACTIONS_JSON:|NEW_CATEGORIES_JSON:/)[0].trim();
-        newDirs = JSON.parse(part);
-      } catch(e) {}
-    }
+    const newDirs = extractJsonBlock(fullText, 'NEW_DIRECTION_JSON');
 
     // Extract NEW_ACCOUNT_JSON
-    let newAccs = null;
-    if (fullText.includes('NEW_ACCOUNT_JSON:')) {
-      try {
-        const part = fullText.split('NEW_ACCOUNT_JSON:')[1].split(/NEW_[A-Z]+_JSON:|TRANSACTIONS_JSON:|NEW_CATEGORIES_JSON:/)[0].trim();
-        newAccs = JSON.parse(part);
-      } catch(e) {}
-    }
+    const newAccs = extractJsonBlock(fullText, 'NEW_ACCOUNT_JSON');
 
     // Extract NEW_FUND_JSON
-    let newFunds = null;
-    if (fullText.includes('NEW_FUND_JSON:')) {
-      try {
-        const part = fullText.split('NEW_FUND_JSON:')[1].split(/NEW_[A-Z]+_JSON:|TRANSACTIONS_JSON:|NEW_CATEGORIES_JSON:/)[0].trim();
-        newFunds = JSON.parse(part);
-      } catch(e) {}
-    }
+    const newFunds = extractJsonBlock(fullText, 'NEW_FUND_JSON');
 
     // Apply new directions
     if (newDirs && Array.isArray(newDirs)) {
