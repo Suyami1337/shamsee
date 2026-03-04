@@ -2067,7 +2067,7 @@ function aiChatHtml() {
           <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;border:1px solid ${ti.border};background:${ti.bg};color:${ti.color};display:inline-block;width:fit-content">${ti.label}</span>
           <div style="font-size:16px;font-weight:600;color:#ccc">${escHtmlAi(tx.category||'—')}</div>
           ${tx.note ? `<div style="font-size:13px;color:#888">${escHtmlAi(tx.note)}</div>` : ''}
-          <div style="font-size:12px;color:#555">${accName} · ${tx.date||''}</div>
+          <div style="font-size:12px;color:#555">${tx.date ? (() => { const dp=(tx.date||'').split('-'); const M=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']; return dp.length===3?parseInt(dp[2])+' '+M[parseInt(dp[1])-1]:tx.date; })() : ''} · ${accName}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-size:17px;font-weight:700;font-family:monospace;color:${ti.color}">${sign}${tx.amount} ${tx.currency||'RUB'}</div>
