@@ -345,7 +345,7 @@ let state = {
   showExportModal: false,
   showSettingsModal: false,
   showProfileModal: false,
-  txTypeFilter: ['income','expense','dds_in','dds_out'], // active types
+  txTypeFilter: ['income','expense','transfer'], // active types
   funds: JSON.parse(JSON.stringify(INITIAL_FUNDS)),
   fundHistory: [],
   tab: 'overview',
@@ -849,7 +849,7 @@ function accountsHtml() {
 function editTxModalHtml(txId) {
   const t = state.transactions.find(x => x.id === txId);
   if (!t) return '';
-  const typeOpts = [['income','💚 Доход'],['expense','🔴 Расход'],['dds_in','🔵 ДДС+'],['dds_out','🟡 ДДС−']]
+  const typeOpts = [['income','💚 Доход'],['expense','🔴 Расход'],['transfer','🟡 ДДС']]
     .map(([v,l]) => `<option value="${v}" ${t.type===v?'selected':''}>${l}</option>`).join('');
   const dirOpts = Object.entries(DIRECTIONS).map(([k,v]) =>
     `<option value="${k}" ${t.direction===k?'selected':''}>${v.icon} ${v.label}</option>`).join('');
@@ -984,8 +984,7 @@ function transactionsHtml() {
   const typeFilters = [
     ['income','💚 Доход','#6ee7b7','rgba(110,231,183,0.12)','rgba(110,231,183,0.3)'],
     ['expense','🔴 Расход','#f87171','rgba(239,68,68,0.12)','rgba(239,68,68,0.3)'],
-    ['dds_in','🔵 ДДС+','#93c5fd','rgba(147,197,253,0.12)','rgba(147,197,253,0.3)'],
-    ['dds_out','🟡 ДДС−','#fbbf24','rgba(251,191,36,0.12)','rgba(251,191,36,0.3)'],
+    ['transfer','🟡 ДДС','#fbbf24','rgba(251,191,36,0.12)','rgba(251,191,36,0.3)'],
   ];
   const typeFilterBar = `<div style="display:flex;gap:8px;padding:8px 16px;flex-wrap:wrap">` +
     typeFilters.map(([type,label,color,bg,border]) => {
@@ -1374,7 +1373,7 @@ function pnlHtml() {
 
     const incomeMap = {}, expenseMap = {};
     txs.forEach(t => {
-      if (t.type === 'dds_in' || t.type === 'dds_out') return;
+      if (t.isTransfer || t.type === 'transfer') return;
       const rv = toRub(t.amount, t.currency);
       if (t.type === 'income') incomeMap[t.category] = (incomeMap[t.category] || 0) + rv;
       else expenseMap[t.category] = (expenseMap[t.category] || 0) + rv;
@@ -1429,7 +1428,7 @@ function pnlHtml() {
     // monthly
     const byMonth = {};
     txs.forEach(t => {
-      if (t.type === 'dds_in' || t.type === 'dds_out') return;
+      if (t.isTransfer || t.type === 'transfer') return;
       const mk = getMonthKey(t.date);
       if (!byMonth[mk]) byMonth[mk] = { in: 0, out: 0 };
       const rv = toRub(t.amount, t.currency);
@@ -1958,6 +1957,10 @@ function modalHtml() {
   const catsIn  = getDirCats(f.direction, 'in').map(c => `<option value="${c}" ${f.category===c?'selected':''}>${c}</option>`).join('');
   const catsOut = getDirCats(f.direction, 'out').map(c => `<option value="${c}" ${f.category===c?'selected':''}>${c}</option>`).join('');
 
+  const isDDS = f.type === 'transfer';
+  const allAccounts = Object.entries(state.accounts);
+  const toAccounts  = allAccounts.filter(([k]) => k !== f.account);
+
   return `
     <div class="modal-bg" id="modal-bg">
       <div class="modal">
@@ -1970,10 +1973,9 @@ function modalHtml() {
             <div>
               <div class="form-label">Тип</div>
               <select class="form-inp" id="f-type">
-                <option value="income"  ${f.type==='income' ?'selected':''}>💚 Доход</option>
-                <option value="expense" ${f.type==='expense'?'selected':''}>🔴 Расход</option>
-                <option value="dds_in"  ${f.type==='dds_in' ?'selected':''}>🔵 ДДС +</option>
-                <option value="dds_out" ${f.type==='dds_out'?'selected':''}>🟡 ДДС −</option>
+                <option value="income"   ${f.type==='income'  ?'selected':''}>💚 Доход</option>
+                <option value="expense"  ${f.type==='expense' ?'selected':''}>🔴 Расход</option>
+                <option value="transfer" ${f.type==='transfer'?'selected':''}>🟡 ДДС</option>
               </select>
             </div>
             <div>
@@ -1981,6 +1983,21 @@ function modalHtml() {
               <input type="date" class="form-inp" id="f-date" value="${f.date}">
             </div>
           </div>
+
+          ${isDDS ? `
+          <div>
+            <div class="form-label">🟡 Откуда (списать)</div>
+            <select class="form-inp" id="f-account">
+              ${allAccounts.map(([k,a]) => `<option value="${k}" ${f.account===k?'selected':''}>${a.name} · ${a.currency}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <div class="form-label">🔵 Куда (зачислить)</div>
+            <select class="form-inp" id="f-to-account">
+              ${toAccounts.map(([k,a]) => `<option value="${k}" ${f.toAccount===k?'selected':''}>${a.name} · ${a.currency}</option>`).join('')}
+            </select>
+          </div>
+          ` : `
           <div>
             <div class="form-label">Направление</div>
             <select class="form-inp" id="f-direction">
@@ -1993,23 +2010,33 @@ function modalHtml() {
               ${dirAccounts.map(([k,a]) => `<option value="${k}" data-currency="${a.currency}" ${f.account===k?'selected':''}>${a.name}</option>`).join('')}
             </select>
           </div>
+          `}
+
           <div class="form-row form-row-3">
             <div>
-              <div class="form-label">Сумма</div>
+              <div class="form-label">Сумма ${isDDS ? '(списание)' : ''}</div>
               <input type="text" inputmode="decimal" placeholder="0" class="form-inp amount-inp" id="f-amount" value="${f.amount}">
             </div>
             <div>
               <div class="form-label">Валюта</div>
               <select class="form-inp" id="f-currency">
-                ${(state.enabledCurrencies||['RUB','SAR','USDT']).map(c => `<option value="${c}" ${f.currency===c?'selected':''}>${c}</option>`).join('')}
+                ${(state.enabledCurrencies||['RUB','SAR','USDT']).map(cur => `<option value="${cur}" ${f.currency===cur?'selected':''}>${cur}</option>`).join('')}
               </select>
             </div>
           </div>
+
+          ${isDDS ? `
+          <div>
+            <div class="form-label">Сумма зачисления <span style="color:#555;font-size:11px">(если другая валюта)</span></div>
+            <input type="text" inputmode="decimal" placeholder="оставь пустым если та же валюта" class="form-inp amount-inp" id="f-to-amount" value="${f.toAmount||''}">
+          </div>
+          ` : ''}
+
           <div>
             <div class="form-label">Категория</div>
             <select class="form-inp" id="f-category">
               <option value="">— выбрать —</option>
-              ${f.type==='dds_in'||f.type==='dds_out'
+              ${isDDS
                 ? `<optgroup label="ДДС">${CATEGORIES_DDS.map(c=>`<option value="${c}" ${f.category===c?'selected':''}>${c}</option>`).join('')}</optgroup>`
                 : f.type==='income'
                   ? `<optgroup label="Доходы">${catsIn}</optgroup>`
@@ -2090,14 +2117,13 @@ function aiChatHtml() {
     const typeInfo = {
       income:  { label:'💚 Доход',  color:'#6ee7b7', bg:'rgba(110,231,183,0.12)', border:'rgba(110,231,183,0.3)' },
       expense: { label:'🔴 Расход', color:'#f87171', bg:'rgba(239,68,68,0.12)',   border:'rgba(239,68,68,0.3)' },
-      dds_in:  { label:'🔵 ДДС+',  color:'#93c5fd', bg:'rgba(59,130,246,0.12)',  border:'rgba(59,130,246,0.3)' },
-      dds_out: { label:'🟡 ДДС−',  color:'#fbbf24', bg:'rgba(251,191,36,0.12)',  border:'rgba(251,191,36,0.3)' },
+      transfer: { label:'🟡 ДДС', color:'#fbbf24', bg:'rgba(251,191,36,0.12)', border:'rgba(251,191,36,0.3)' },
     };
     const rows = state.aiPendingTxs.map((tx, i) => {
       const ti = typeInfo[tx.type] || typeInfo.expense;
       const acc = state.accounts[tx.account];
       const accName = acc ? acc.name : tx.account || '—';
-      const sign = (tx.type==='income'||tx.type==='dds_in') ? '+' : '-';
+      const sign = tx.type==='income' ? '+' : '-';
       return `<div class="tx-item" style="margin-bottom:8px;position:relative;cursor:default">
         <button data-ai-remove="${i}" style="position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#555;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:1;line-height:1">×</button>
         <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;padding-right:28px">
@@ -2325,7 +2351,7 @@ NEW_FUND_JSON:
       if (match) {
         try {
           const candidate = JSON.parse(match[0]);
-          if (candidate[0] && candidate[0].type && ['income','expense','dds_in','dds_out'].includes(candidate[0].type)) {
+          if (candidate[0] && candidate[0].type && ['income','expense','transfer'].includes(candidate[0].type)) {
             parsed = candidate;
             displayText = fullText.replace(match[0], '').replace('TRANSACTIONS_JSON:', '').replace('NEW_CATEGORIES_JSON:', '').trim();
           }
@@ -2428,8 +2454,8 @@ function confirmAiTxs() {
     const amount = parseFloat(tx.amount) || 0;
     // Update account balance
     if (acc) {
-      if (tx.type === 'income' || tx.type === 'dds_in') acc.balance += amount;
-      else acc.balance -= amount;
+      if (tx.type === 'income') acc.balance += amount;
+      else if (tx.type !== 'transfer') acc.balance -= amount;
     }
     state.transactions.push({
       id, date: tx.date || today, type: tx.type, direction: tx.direction,
@@ -3037,13 +3063,14 @@ function bindEvents() {
   if (mb) mb.onclick = (e) => { if (e.target === mb) { state.showModal = false; render(); } };
 
   // form live update
-  ['f-type','f-date','f-direction','f-account','f-amount','f-currency','f-category','f-note'].forEach(id => {
+  ['f-type','f-date','f-direction','f-account','f-to-account','f-amount','f-to-amount','f-currency','f-category','f-note'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.oninput = el.onchange = () => {
-      state.form[id.replace('f-','')] = id === 'f-amount' ? el.value.replace(/\s/g,'') : el.value;
+      const key = id.replace('f-','');
+      state.form[key] = id === 'f-amount' ? el.value.replace(/\s/g,'') : el.value;
       if (id === 'f-type') {
-        state.form.category = ''; // reset category when type changes
+        state.form.category = '';
         render();
       }
       if (id === 'f-direction') {
@@ -3074,19 +3101,41 @@ function bindEvents() {
     if (!rawAmt || parseFloat(rawAmt) <= 0) { alert('Укажи сумму'); return; }
     if (!category) { alert('Выбери категорию'); return; }
 
-    const tx = {
-      id: Date.now().toString(),
-      date, type, direction, account,
-      amount: parseFloat(rawAmt),
-      currency, category, note,
-      createdAt: Date.now(),
-    };
-    state.transactions.push(tx);
-    const acc = state.accounts[tx.account];
-    if (acc) {
-      if (tx.type === 'income' || tx.type === 'dds_in') acc.balance += tx.amount;
-      else acc.balance -= tx.amount;
+    const id = Date.now().toString();
+
+    if (type === 'transfer') {
+      const toKey    = get('f-to-account') || state.form.toAccount;
+      const toAmtRaw = get('f-to-amount').replace(/\s/g,'');
+      const fromAcc  = state.accounts[account];
+      const toAcc    = state.accounts[toKey];
+      if (!fromAcc || !toAcc) { alert('Выбери оба счёта'); return; }
+      const fromAmt = parseFloat(rawAmt);
+      const toAmt   = toAmtRaw && parseFloat(toAmtRaw) > 0 ? parseFloat(toAmtRaw) : fromAmt;
+      fromAcc.balance -= fromAmt;
+      toAcc.balance   += toAmt;
+      state.transactions.push({
+        id: 'tr_'+id, date, type: 'transfer',
+        fromAccount: account, toAccount: toKey,
+        fromDirection: fromAcc.direction, toDirection: toAcc.direction,
+        fromAmount: fromAmt, toAmount: toAmt,
+        fromCurrency: currency, toCurrency: toAcc.currency,
+        category, note, createdAt: Date.now(), isTransfer: true
+      });
+    } else {
+      const tx = {
+        id, date, type, direction, account,
+        amount: parseFloat(rawAmt),
+        currency, category, note,
+        createdAt: Date.now(),
+      };
+      state.transactions.push(tx);
+      const acc = state.accounts[tx.account];
+      if (acc) {
+        if (tx.type === 'income') acc.balance += tx.amount;
+        else acc.balance -= tx.amount;
+      }
     }
+
     saveToStorage();
     state.showModal = false;
     state.form = defaultForm();
@@ -3702,13 +3751,13 @@ function doExportPdf() {
 
   const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
   const fmtDate = d => { const p=d.split('-'); return p.length===3?`${parseInt(p[2])} ${MONTHS_GEN[parseInt(p[1])-1]} ${p[0]}`:d; };
-  const typeLabel = t => t==='income'?'Доход':t==='expense'?'Расход':t==='dds_in'?'ДДС+':'ДДС−';
-  const typeColor = t => t==='income'?'#16a34a':t==='expense'?'#dc2626':t==='dds_in'?'#2563eb':'#d97706';
+  const typeLabel = t => t==='income'?'Доход':t==='expense'?'Расход':'ДДС';
+  const typeColor = t => t==='income'?'#16a34a':t==='expense'?'#dc2626':'#d97706';
 
   const txRows = txs.map(t => {
     const acc = state.accounts[t.account];
     const dir = DIRECTIONS[t.direction];
-    const sign = (t.type==='income'||t.type==='dds_in') ? '+' : '-';
+    const sign = t.type==='income' ? '+' : '-';
     const color = typeColor(t.type);
     return `<tr>
       <td>${fmtDate(t.date)}</td>
@@ -3790,8 +3839,8 @@ function doExportPdf() {
 
   const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
   const fmtDate = d => { const p=d.split('-'); return p.length===3?`${parseInt(p[2])} ${MONTHS_GEN[parseInt(p[1])-1]} ${p[0]}`:d; };
-  const typeLabel = t => t==='income'?'Доход':t==='expense'?'Расход':t==='dds_in'?'ДДС+':'ДДС−';
-  const typeColor = t => t==='income'?'#22c55e':t==='expense'?'#ef4444':t==='dds_in'?'#3b82f6':'#f59e0b';
+  const typeLabel = t => t==='income'?'Доход':t==='expense'?'Расход':'ДДС';
+  const typeColor = t => t==='income'?'#22c55e':t==='expense'?'#ef4444':'#f59e0b';
 
   let txs = state.transactions.filter(t => {
     if (!dirs.includes(t.direction)) return false;
@@ -3808,7 +3857,7 @@ function doExportPdf() {
   const rows = txs.map(t => {
     const acc = state.accounts[t.account];
     const dir = DIRECTIONS[t.direction];
-    const sign = (t.type==='income'||t.type==='dds_in') ? '+' : '-';
+    const sign = t.type==='income' ? '+' : '-';
     const color = typeColor(t.type);
     return `<tr>
       <td>${fmtDate(t.date)}</td>
@@ -3879,7 +3928,7 @@ function doExportExcel() {
 
   const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
   const fmtDate = d => { const p=d.split('-'); return p.length===3?`${parseInt(p[2])} ${MONTHS_GEN[parseInt(p[1])-1]} ${p[0]}`:d; };
-  const typeLabel = t => t==='income'?'Доход':t==='expense'?'Расход':t==='dds_in'?'ДДС+':'ДДС−';
+  const typeLabel = t => t==='income'?'Доход':t==='expense'?'Расход':'ДДС';
 
   const wb = XLSX.utils.book_new();
 
@@ -3888,7 +3937,7 @@ function doExportExcel() {
   const rows = txs.map(t => {
     const acc = state.accounts[t.account];
     const dir = DIRECTIONS[t.direction];
-    const sign = (t.type==='income'||t.type==='dds_in') ? 1 : -1;
+    const sign = t.type==='income' ? 1 : -1;
     return [
       fmtDate(t.date),
       typeLabel(t.type),
@@ -3917,7 +3966,7 @@ function doExportExcel() {
       if (to) {
         // Reverse all transactions after the period end date
         state.transactions.filter(t => t.account === k && new Date(t.date) > to).forEach(t => {
-          const sign = (t.type==='income'||t.type==='dds_in') ? 1 : -1;
+          const sign = t.type==='income' ? 1 : -1;
           bal -= sign * t.amount;
         });
       }
@@ -4185,7 +4234,8 @@ document.addEventListener('click', function(e) {
       // Reverse balance effect
       const acc = state.accounts[tx.account];
       if (acc) {
-        if (tx.type === 'income' || tx.type === 'dds_in') acc.balance -= tx.amount;
+        if (tx.type === 'income') acc.balance -= tx.amount;
+      else if (!tx.isTransfer && tx.type !== 'transfer') acc.balance += tx.amount;
         else acc.balance += tx.amount;
       }
     }
@@ -4205,7 +4255,8 @@ document.addEventListener('click', function(e) {
     const acc = state.accounts[tx.account];
     // Reverse old balance effect
     if (acc) {
-      if (tx.type === 'income' || tx.type === 'dds_in') acc.balance -= tx.amount;
+      if (tx.type === 'income') acc.balance -= tx.amount;
+      else if (!tx.isTransfer && tx.type !== 'transfer') acc.balance += tx.amount;
       else acc.balance += tx.amount;
     }
     // Apply new values
@@ -4219,7 +4270,8 @@ document.addEventListener('click', function(e) {
     // Apply new balance effect
     const newAcc = state.accounts[tx.account];
     if (newAcc) {
-      if (tx.type === 'income' || tx.type === 'dds_in') newAcc.balance += tx.amount;
+      if (tx.type === 'income') newAcc.balance += tx.amount;
+      else if (!tx.isTransfer && tx.type !== 'transfer') newAcc.balance -= tx.amount;
       else newAcc.balance -= tx.amount;
       tx.currency = newAcc.currency;
     }
