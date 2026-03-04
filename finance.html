@@ -2199,7 +2199,7 @@ function aiEditModalHtml() {
   const catsIn  = getDirCats(dirKey,'in').map(cat=>`<option value="${cat}" ${tx.category===cat?'selected':''}>${cat}</option>`).join('');
   const catsOut = getDirCats(dirKey,'out').map(cat=>`<option value="${cat}" ${tx.category===cat?'selected':''}>${cat}</option>`).join('');
   const ddsCats = CATEGORIES_DDS.map(cat=>`<option value="${cat}" ${tx.category===cat?'selected':''}>${cat}</option>`).join('');
-  return `<div id="ai-edit-modal-bg" style="position:absolute;inset:0;background:rgba(0,0,0,0.88);backdrop-filter:blur(8px);z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;border-radius:24px">
+  return `<div id="ai-edit-modal-bg" style="position:absolute;inset:0;background:rgba(0,0,0,0.88);backdrop-filter:blur(8px);z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;border-radius:24px" data-ai-edit-cancel>
     <div style="background:#111;border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:24px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
         <span style="font-size:16px;font-weight:700;color:#fff">✏️ Операция #${idx+1}</span>
@@ -2263,8 +2263,9 @@ async function sendAiMessage(text, imageBase64, imageMediaType) {
   if (!text && !imageBase64) return;
 
   // Add user message
-  state.aiMessages.push({ role: 'user', text, image: imageBase64 ? `data:${imageMediaType||'image/jpeg'};base64,${imageBase64}` : null });
+  state.aiMessages.push({ role: 'user', text, image: imageBase64 ? `data:\${imageMediaType||'image/jpeg'};base64,\${imageBase64}` : null });
   state.aiMessages.push({ role: 'typing' });
+  try { sessionStorage.setItem('ai_chat_history', JSON.stringify({ messages: state.aiMessages.filter(m=>m.role!=='typing'), ts: Date.now(), projectId: _projectId })); } catch(e) {}
   render(); scrollAiToBottom();
 
   // Build context about user's project
@@ -2354,9 +2355,11 @@ NEW_CATEGORIES_JSON:
 NEW_DIRECTION_JSON:
 [{"key":"уникальный_ключ","label":"Название","icon":"🏢","color":"#a78bfa"}]
 
-Для нового счёта:
+Для нового счёта (direction ОБЯЗАТЕЛЬНО должен быть одним из существующих ключей направлений из списка выше, или ключом из NEW_DIRECTION_JSON если создаёшь новое):
 NEW_ACCOUNT_JSON:
 [{"key":"уникальный_ключ","name":"Название счёта","direction":"ключ_направления","currency":"RUB","icon":"💳"}]
+
+ВАЖНО при создании счёта: всегда спрашивай — к какому направлению привязать и в какой валюте.
 
 Для нового фонда:
 NEW_FUND_JSON:
@@ -2542,9 +2545,11 @@ NEW_FUND_JSON:
     } else {
       state.aiMessages.push({ role: 'assistant', text: displayText || fullText || '...' });
     }
+    try { sessionStorage.setItem('ai_chat_history', JSON.stringify({ messages: state.aiMessages, ts: Date.now(), projectId: _projectId })); } catch(e) {}
   } catch(e) {
     state.aiMessages = state.aiMessages.filter(m => m.role !== 'typing');
     state.aiMessages.push({ role: 'assistant', text: '⚠️ Ошибка: ' + e.message });
+    try { sessionStorage.setItem('ai_chat_history', JSON.stringify({ messages: state.aiMessages, ts: Date.now(), projectId: _projectId })); } catch(e) {}
   }
   render(); scrollAiToBottom();
 }
@@ -3422,8 +3427,21 @@ function bindEvents() {
     btn.onclick = () => { state.aiEditingIdx = parseInt(btn.dataset.aiEdit); render(); scrollAiToBottom(); };
   });
   document.querySelectorAll('[data-ai-edit-cancel]').forEach(btn => {
-    btn.onclick = () => { state.aiEditingIdx = null; render(); };
+    btn.onclick = (e) => {
+      // Only close if clicking the bg overlay, not the inner modal card
+      if (btn.id === 'ai-edit-modal-bg' || btn.hasAttribute('data-ai-edit-cancel')) {
+        if (e.target !== btn && !btn.id) return; // inner content clicked — ignore
+      }
+      const msgs = document.getElementById('ai-chat-messages');
+      const scrollPos = msgs ? msgs.scrollTop : null;
+      state.aiEditingIdx = null;
+      render();
+      if (scrollPos !== null) { const el = document.getElementById('ai-chat-messages'); if (el) el.scrollTop = scrollPos; }
+    };
   });
+  // Stop clicks on the inner modal card from closing the bg
+  const aiEditInner = document.querySelector('#ai-edit-modal-bg > div');
+  if (aiEditInner) aiEditInner.onclick = (e) => e.stopPropagation();
   document.querySelectorAll('[data-ai-edit-save]').forEach(btn => {
     btn.onclick = () => {
       const idx = parseInt(btn.dataset.aiEditSave);
@@ -3440,8 +3458,11 @@ function bindEvents() {
       const acc = state.accounts[account];
       state.aiPendingTxs[idx] = { ...tx, type, date, account, amount, currency, category, note,
         direction: acc ? acc.direction : tx.direction };
+      const msgs2 = document.getElementById('ai-chat-messages');
+      const scrollPos2 = msgs2 ? msgs2.scrollTop : null;
       state.aiEditingIdx = null;
       render();
+      if (scrollPos2 !== null) { const el2 = document.getElementById('ai-chat-messages'); if (el2) el2.scrollTop = scrollPos2; }
     };
   });
   document.querySelectorAll('[data-ai-remove]').forEach(btn => {
@@ -3771,6 +3792,20 @@ function applyTheme() {
 
   // Always sync DIRECTIONS global after loading
   DIRECTIONS = state.directions;
+
+  // Restore AI chat history (expires after 30 min)
+  try {
+    const saved = sessionStorage.getItem('ai_chat_history');
+    if (saved) {
+      const { messages, ts, projectId } = JSON.parse(saved);
+      const age = Date.now() - ts;
+      if (age < 30 * 60 * 1000 && projectId === _projectId) {
+        state.aiMessages = messages;
+      } else {
+        sessionStorage.removeItem('ai_chat_history');
+      }
+    }
+  } catch(e) {}
 
   applyTheme();
   document.getElementById('app').innerHTML = '<div style="color:#888;padding:40px;font-family:monospace">Шаг 3: render()...</div>';
