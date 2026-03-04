@@ -2284,29 +2284,34 @@ async function sendAiMessage(text, imageBase64, imageMediaType) {
 Активный месяц: ${state.activeMonth || 'текущий'}
 Дата сегодня: ${new Date().toISOString().slice(0,10)}
 
-═══ ТИПЫ ОПЕРАЦИЙ (очень важно понимать логику) ═══
+═══ ТИПЫ ОПЕРАЦИЙ — ТОЛЬКО ТРИ ТИПА ═══
 
-1. ДОХОД (type: "income") — деньги пришли извне на счёт.
-   Пример: получил зарплату, клиент оплатил, дивиденды поступили.
+1. ДОХОД (type: "income") — деньги пришли ИЗВНЕ на счёт.
+   Пример: зарплата, оплата от клиента, дивиденды, предоплата.
+   Поля: type, amount, currency, direction, account, category, date, note
 
-2. РАСХОД (type: "expense") — деньги ушли со счёта на внешние нужды.
-   Пример: купил продукты, заплатил за аренду, оплатил подписку.
+2. РАСХОД (type: "expense") — деньги ушли со счёта на ВНЕШНИЕ нужды.
+   Пример: продукты, аренда, подписка, оплата услуг.
+   Поля: type, amount, currency, direction, account, category, date, note
 
-3. ДДС+ (type: "dds_in") — деньги ПРИШЛИ на счёт, но это НЕ доход (движение денег между счетами).
-   Пример: перевод между своими счетами (получающая сторона), снятие наличных (приход на счёт "Наличные").
+3. ПЕРЕВОД (type: "transfer") — деньги переместились МЕЖДУ счетами пользователя.
+   Это ОДНА операция (не две!). Она сразу списывает с одного счёта и зачисляет на другой.
+   Примеры: снял наличные с карты, перевёл между счетами, обменял валюту.
+   Поля: type:"transfer", fromAccount, toAccount, fromAmount, toAmount, fromCurrency, toCurrency, category, date, note
+   
+   Категории для переводов: "Снятие наличных", "Перевод между счетами", "Пополнение счёта", "Обмен валют"
 
-4. ДДС− (type: "dds_out") — деньги УШЛИ со счёта, но это НЕ расход (движение денег между счетами).
-   Пример: перевод между своими счетами (отправляющая сторона), снятие наличных (уход с карты).
+⚠️ ЗАПРЕЩЕНО использовать type "dds_in" или "dds_out" — их больше не существует!
 
-═══ ПРАВИЛО ПЕРЕВОДОВ И СНЯТИЙ НАЛИЧНЫХ ═══
-Когда деньги перемещаются МЕЖДУ СЧЕТАМИ пользователя — всегда создавай ДВЕ операции:
-- ДДС− на счёте-отправителе (откуда ушли деньги)
-- ДДС+ на счёте-получателе (куда пришли деньги)
+═══ ПРАВИЛО ПЕРЕВОДОВ ═══
+Перевод — ВСЕГДА одна операция типа "transfer", НЕ две отдельных.
+Обязательно уточняй: с какого счёта (fromAccount) и на какой (toAccount).
+Если суммы разные (обмен валют) — укажи fromAmount и toAmount отдельно.
 
 Примеры:
-• "снял наличные 10000 с карты" → ДДС− на карте + ДДС+ на счёте наличных
-• "перевёл 5000 с личной карты на бизнес счёт" → ДДС− личная карта + ДДС+ бизнес счёт
-• "положил деньги на карту" → ДДС− наличные + ДДС+ карта
+• "снял 10000 наличных с карты" → transfer: fromAccount=карта, toAccount=наличные, fromAmount=10000, toAmount=10000
+• "обменял 1000$ на рубли" → transfer: fromAccount=долларовый счёт, toAccount=рублёвый, fromAmount=1000, toAmount=90000, fromCurrency=USD, toCurrency=RUB
+• "перевёл 5000 с личной на бизнес" → transfer: fromAccount=личная, toAccount=бизнес, fromAmount=5000, toAmount=5000
 
 ═══ ПРАВИЛА УТОЧНЕНИЯ ═══
 
@@ -2340,8 +2345,13 @@ async function sendAiMessage(text, imageBase64, imageMediaType) {
 ═══ ФОРМАТ ОТВЕТА ═══
 Сначала краткое подтверждение на русском, затем JSON:
 
-TRANSACTIONS_JSON:
-[{"type":"income|expense|dds_in|dds_out","amount":1000,"currency":"RUB","direction":"ключ_направления","account":"ключ_счёта","category":"Название категории","date":"2026-03-03","note":"комментарий"}]
+TRANSACTIONS_JSON для доходов/расходов:
+[{"type":"income|expense","amount":1000,"currency":"RUB","direction":"ключ_направления","account":"ключ_счёта","category":"Название категории","date":"2026-03-03","note":"комментарий"}]
+
+TRANSACTIONS_JSON для переводов:
+[{"type":"transfer","fromAccount":"ключ_счёта_откуда","toAccount":"ключ_счёта_куда","fromAmount":1000,"toAmount":1000,"fromCurrency":"RUB","toCurrency":"RUB","category":"Снятие наличных","date":"2026-03-03","note":"Снятие наличных: Личная карта → Наличные"}]
+
+Можно смешивать разные типы в одном массиве TRANSACTIONS_JSON.
 
 Если нужна новая категория — добавь отдельный блок ПЕРЕД транзакциями:
 NEW_CATEGORIES_JSON:
@@ -2368,12 +2378,9 @@ NEW_FUND_JSON:
 Ключи должны быть латиницей без пробелов, уникальными (например: "business", "alfa_card", "reserve_fund").
 
 ═══ ПРАВИЛО КОММЕНТАРИЯ ПРИ ПЕРЕВОДАХ ═══
-При переводе между счетами ВСЕГДА заполняй поле note автоматически:
-- Для ДДС− (откуда): "Перевод → [название счёта получателя]"
-- Для ДДС+ (куда): "Перевод ← [название счёта отправителя]"
-Пример: снял наличные с Личной карты на Наличные:
-- ДДС− карта: note = "Перевод → Наличные"
-- ДДС+ наличные: note = "Перевод ← Личная карта"
+Для операции transfer поле note заполняй автоматически:
+"[Категория]: [название счёта откуда] → [название счёта куда]"
+Пример: note = "Снятие наличных: Личная карта → Наличные"
 
 ═══ РАБОТА С ИЗОБРАЖЕНИЯМИ ═══
 Если пользователь прислал скриншот (банковской выписки, чека, переписки с суммами):
@@ -2398,16 +2405,21 @@ NEW_FUND_JSON:
 
     const apiMessages = [];
     // Add conversation history (skip typing indicators)
-    // Only keep last 10 messages in history, strip old images to avoid payload bloat
-    const histMsgs = state.aiMessages.filter(m => m.role !== 'typing').slice(0, -1).slice(-10);
+    // Keep last 12 messages. Include images from last 4 user messages to preserve context.
+    const histMsgs = state.aiMessages.filter(m => m.role !== 'typing').slice(0, -1).slice(-12);
+    // Find how many user messages are in history to decide which get images
+    const userMsgIndices = histMsgs.map((m,i) => m.role==='user' ? i : -1).filter(i=>i>=0);
+    const recentUserIndices = new Set(userMsgIndices.slice(-4)); // last 4 user messages keep image
     histMsgs.forEach((m, idx) => {
       if (m.role === 'user') {
         const content = [];
-        // Only include image if it's one of the last 2 user messages
-        if (m.image && idx >= histMsgs.length - 2) {
+        if (m.image && recentUserIndices.has(idx)) {
           const b64 = m.image.split(',')[1];
           const mt = m.image.split(';')[0].split(':')[1] || 'image/jpeg';
           content.push({ type: 'image', source: { type: 'base64', media_type: mt, data: b64 } });
+        } else if (m.image && !recentUserIndices.has(idx)) {
+          // Replace old image with text placeholder so AI knows it was there
+          content.push({ type: 'text', text: '[ранее был прикреплён скриншот]' });
         }
         if (m.text) content.push({ type: 'text', text: m.text });
         if (content.length === 0) content.push({ type: 'text', text: '[изображение]' });
@@ -2428,7 +2440,16 @@ NEW_FUND_JSON:
     });
 
     const data = await resp.json();
+    // Handle API errors
+    if (!resp.ok || data.error || (data.type === 'error')) {
+      const errMsg = data.error?.message || data.error || JSON.stringify(data).slice(0,200);
+      throw new Error('API: ' + errMsg);
+    }
     const fullText = (data.content || []).map(b => b.text || '').join('');
+    if (!fullText.trim()) {
+      // Empty response - likely overload, retry hint
+      throw new Error('Пустой ответ от AI. Попробуй отправить сообщение ещё раз.');
+    }
 
     // Remove typing indicator
     state.aiMessages = state.aiMessages.filter(m => m.role !== 'typing');
