@@ -2054,78 +2054,7 @@ function modalHtml() {
           <button class="btn-submit" id="btn-submit">Добавить операцию</button>
         </div>
       </div>
-      ${state.aiEditingIdx !== null ? (() => {
-        const idx = state.aiEditingIdx;
-        const tx = state.aiPendingTxs[idx];
-        if (!tx) return '';
-        const allAccounts = Object.entries(state.accounts);
-        const dirKey = tx.direction || (state.accounts[tx.account]?.direction) || Object.keys(state.directions||{})[0];
-        const catsIn  = getDirCats(dirKey,'in').map(cat=>`<option value="${cat}" ${tx.category===cat?'selected':''}>${cat}</option>`).join('');
-        const catsOut = getDirCats(dirKey,'out').map(cat=>`<option value="${cat}" ${tx.category===cat?'selected':''}>${cat}</option>`).join('');
-        const ddsCats = CATEGORIES_DDS.map(cat=>`<option value="${cat}" ${tx.category===cat?'selected':''}>${cat}</option>`).join('');
-        return `<div id="ai-edit-modal-bg" style="position:absolute;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px;border-radius:24px">
-          <div style="background:#111;border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:24px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-              <span style="font-size:16px;font-weight:700;color:#fff">✏️ Операция #${idx+1}</span>
-              <button data-ai-edit-cancel style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#666;font-size:18px;cursor:pointer;padding:2px 10px">×</button>
-            </div>
-            <div class="form-grid">
-              <div class="form-row form-row-2">
-                <div>
-                  <div class="form-label">Тип</div>
-                  <select class="form-inp" id="aie-type">
-                    <option value="income"   ${tx.type==='income'  ?'selected':''}>💚 Доход</option>
-                    <option value="expense"  ${tx.type==='expense' ?'selected':''}>🔴 Расход</option>
-                    <option value="transfer" ${tx.type==='transfer'?'selected':''}>🟡 Перевод</option>
-                  </select>
-                </div>
-                <div>
-                  <div class="form-label">Дата</div>
-                  <input type="date" class="form-inp" id="aie-date" value="${tx.date||''}">
-                </div>
-              </div>
-              <div>
-                <div class="form-label">Счёт</div>
-                <select class="form-inp" id="aie-account">
-                  ${allAccounts.map(([k,a])=>`<option value="${k}" ${tx.account===k?'selected':''}>${a.name} · ${a.currency}</option>`).join('')}
-                </select>
-              </div>
-              <div class="form-row form-row-3">
-                <div>
-                  <div class="form-label">Сумма</div>
-                  <input type="number" class="form-inp" id="aie-amount" value="${tx.amount}">
-                </div>
-                <div>
-                  <div class="form-label">Валюта</div>
-                  <select class="form-inp" id="aie-currency">
-                    ${(state.enabledCurrencies||['RUB','SAR','USDT']).map(cur=>`<option value="${cur}" ${tx.currency===cur?'selected':''}>${cur}</option>`).join('')}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <div class="form-label">Категория</div>
-                <select class="form-inp" id="aie-category">
-                  <option value="">— выбрать —</option>
-                  ${tx.type==='transfer'
-                    ? `<optgroup label="Перевод">${ddsCats}</optgroup>`
-                    : tx.type==='income'
-                      ? `<optgroup label="Доходы">${catsIn}</optgroup>`
-                      : `<optgroup label="Расходы">${catsOut}</optgroup>`
-                  }
-                  <option value="${tx.category||''}" selected style="display:none">${tx.category||''}</option>
-                </select>
-              </div>
-              <div>
-                <div class="form-label">Комментарий</div>
-                <input type="text" class="form-inp" id="aie-note" value="${escHtmlAi(tx.note||'')}">
-              </div>
-              <button class="btn-submit" data-ai-edit-save="${idx}">✓ Сохранить изменения</button>
-            </div>
-          </div>
-        </div>`;
-      })() : ''}
-    </div>
-  </div>`;
+    </div>`;
 }
 
 function ratesModalHtml() {
@@ -2241,9 +2170,9 @@ function aiChatHtml() {
         </div>
         <div class="ai-chat-messages" id="ai-chat-messages">
           ${msgs || '<div class="ai-msg ai-msg-assistant">Привет! Опиши свои операции — текстом, списком или загрузи скриншот банковской выписки. Я всё пойму и создам операции автоматически 👇</div>'}
+          ${pendingHtml}
         </div>
         <div class="ai-chat-input-area">
-          ${pendingHtml}
           <div style="display:flex;gap:8px;align-items:flex-end">
             <label for="ai-img-input" style="width:40px;height:40px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;flex-shrink:0" title="Загрузить скриншот">📎</label>
             <input type="file" id="ai-img-input" accept="image/*" style="display:none">
@@ -2252,8 +2181,67 @@ function aiChatHtml() {
             <button id="ai-send-btn" style="width:40px;height:40px;border-radius:10px;border:none;background:linear-gradient(135deg,#6ee7b7,#3b82f6);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;flex-shrink:0">➤</button>
           </div>
         </div>
+        ${state.aiEditingIdx !== null ? aiEditModalHtml() : ''}
       </div>
     </div>`;
+}
+
+function aiEditModalHtml() {
+  const idx = state.aiEditingIdx;
+  const tx = state.aiPendingTxs[idx];
+  if (!tx) return '';
+  const allAccounts = Object.entries(state.accounts);
+  const dirKey = tx.direction || (state.accounts[tx.account] && state.accounts[tx.account].direction) || Object.keys(state.directions||{})[0];
+  const catsIn  = getDirCats(dirKey,'in').map(cat=>`<option value="${cat}" ${tx.category===cat?'selected':''}>${cat}</option>`).join('');
+  const catsOut = getDirCats(dirKey,'out').map(cat=>`<option value="${cat}" ${tx.category===cat?'selected':''}>${cat}</option>`).join('');
+  const ddsCats = CATEGORIES_DDS.map(cat=>`<option value="${cat}" ${tx.category===cat?'selected':''}>${cat}</option>`).join('');
+  return `<div id="ai-edit-modal-bg" style="position:absolute;inset:0;background:rgba(0,0,0,0.88);backdrop-filter:blur(8px);z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;border-radius:24px">
+    <div style="background:#111;border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:24px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <span style="font-size:16px;font-weight:700;color:#fff">✏️ Операция #${idx+1}</span>
+        <button data-ai-edit-cancel style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#666;font-size:18px;cursor:pointer;padding:2px 10px">×</button>
+      </div>
+      <div class="form-grid">
+        <div class="form-row form-row-2">
+          <div><div class="form-label">Тип</div>
+            <select class="form-inp" id="aie-type">
+              <option value="income" ${tx.type==='income'?'selected':''}>💚 Доход</option>
+              <option value="expense" ${tx.type==='expense'?'selected':''}>🔴 Расход</option>
+              <option value="transfer" ${tx.type==='transfer'?'selected':''}>🟡 Перевод</option>
+            </select>
+          </div>
+          <div><div class="form-label">Дата</div>
+            <input type="date" class="form-inp" id="aie-date" value="${tx.date||''}">
+          </div>
+        </div>
+        <div><div class="form-label">Счёт</div>
+          <select class="form-inp" id="aie-account">
+            ${allAccounts.map(([k,a])=>`<option value="${k}" ${tx.account===k?'selected':''}>${a.name} · ${a.currency}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-row form-row-3">
+          <div><div class="form-label">Сумма</div>
+            <input type="number" class="form-inp" id="aie-amount" value="${tx.amount}">
+          </div>
+          <div><div class="form-label">Валюта</div>
+            <select class="form-inp" id="aie-currency">
+              ${(state.enabledCurrencies||['RUB','SAR','USDT']).map(cur=>`<option value="${cur}" ${tx.currency===cur?'selected':''}>${cur}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div><div class="form-label">Категория</div>
+          <select class="form-inp" id="aie-category">
+            ${tx.type==='transfer' ? `<optgroup label="Перевод">${ddsCats}</optgroup>` : tx.type==='income' ? `<optgroup label="Доходы">${catsIn}</optgroup>` : `<optgroup label="Расходы">${catsOut}</optgroup>`}
+            <option value="${tx.category||''}" selected>${tx.category||''}</option>
+          </select>
+        </div>
+        <div><div class="form-label">Комментарий</div>
+          <input type="text" class="form-inp" id="aie-note" value="${escHtmlAi(tx.note||'')}">
+        </div>
+        <button class="btn-submit" data-ai-edit-save="${idx}">✓ Сохранить изменения</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 function escHtmlAi(s) {
@@ -2267,11 +2255,11 @@ function scrollAiToBottom() {
   }, 50);
 }
 
-async function sendAiMessage(text, imageBase64) {
+async function sendAiMessage(text, imageBase64, imageMediaType) {
   if (!text && !imageBase64) return;
 
   // Add user message
-  state.aiMessages.push({ role: 'user', text, image: imageBase64 ? `data:image/jpeg;base64,${imageBase64}` : null });
+  state.aiMessages.push({ role: 'user', text, image: imageBase64 ? `data:${imageMediaType||'image/jpeg'};base64,${imageBase64}` : null });
   state.aiMessages.push({ role: 'typing' });
   render(); scrollAiToBottom();
 
@@ -2380,6 +2368,14 @@ NEW_FUND_JSON:
 - ДДС− карта: note = "Перевод → Наличные"
 - ДДС+ наличные: note = "Перевод ← Личная карта"
 
+═══ РАБОТА С ИЗОБРАЖЕНИЯМИ ═══
+Если пользователь прислал скриншот (банковской выписки, чека, переписки с суммами):
+1. Внимательно прочитай все суммы, даты, описания операций
+2. Распознай каждую операцию
+3. Сразу сформируй TRANSACTIONS_JSON со всеми найденными операциями
+4. Если что-то неясно — задай все вопросы одним сообщением
+НЕ говори "я вижу изображение" или "на скриншоте" — просто сразу обрабатывай операции.
+
 ВАЖНО:
 - При создании новых сущностей — сначала NEW_*_JSON, потом TRANSACTIONS_JSON
 - direction счёта должен совпадать с существующим или новым направлением
@@ -2389,7 +2385,7 @@ NEW_FUND_JSON:
     // Build messages for built-in Claude API (no key needed)
     const userContent = [];
     if (imageBase64) {
-      userContent.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageBase64 } });
+      userContent.push({ type: 'image', source: { type: 'base64', media_type: imageMediaType || 'image/jpeg', data: imageBase64 } });
     }
     if (text) userContent.push({ type: 'text', text });
 
@@ -3647,10 +3643,12 @@ function applyTheme() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = function(ev) {
-      const base64 = ev.target.result.split(',')[1];
+      const dataUrl = ev.target.result;
+      const mediaType = dataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
+      const base64 = dataUrl.split(',')[1];
       const text = document.getElementById('ai-text-input')?.value.trim() || '';
       document.getElementById('ai-text-input') && (document.getElementById('ai-text-input').value = '');
-      sendAiMessage(text || null, base64);
+      sendAiMessage(text || 'Распознай операции на этом скриншоте', base64, mediaType);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -3679,41 +3677,87 @@ let _voiceRecognition = null;
 let _voiceActive = false;
 
 function startVoiceInput() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    alert('Голосовой ввод не поддерживается в этом браузере. Используй Chrome.');
-    return;
-  }
+  const btn = document.getElementById('ai-voice-btn');
+
+  // If already active — stop
   if (_voiceActive) {
     _voiceRecognition && _voiceRecognition.stop();
+    _voiceActive = false;
+    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; btn.style.borderColor = ''; }
     return;
   }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    // Fallback: MediaRecorder approach
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('Голосовой ввод не поддерживается в этом браузере. Используй Chrome или Safari.');
+      return;
+    }
+    alert('Голосовой ввод работает только в Chrome. Открой сайт в Chrome для использования этой функции.');
+    return;
+  }
+
   _voiceRecognition = new SpeechRecognition();
   _voiceRecognition.lang = 'ru-RU';
-  _voiceRecognition.continuous = false;
-  _voiceRecognition.interimResults = false;
+  _voiceRecognition.continuous = true;
+  _voiceRecognition.interimResults = true;
+  _voiceRecognition.maxAlternatives = 1;
 
-  const btn = document.getElementById('ai-voice-btn');
-  if (btn) { btn.textContent = '⏹'; btn.style.background = 'rgba(239,68,68,0.2)'; btn.style.borderColor = 'rgba(239,68,68,0.4)'; }
+  if (btn) {
+    btn.textContent = '⏹';
+    btn.style.background = 'rgba(239,68,68,0.25)';
+    btn.style.borderColor = 'rgba(239,68,68,0.5)';
+    btn.style.color = '#f87171';
+    btn.title = 'Нажми чтобы остановить';
+  }
   _voiceActive = true;
 
+  let finalTranscript = '';
+
   _voiceRecognition.onresult = function(e) {
-    const text = e.results[0][0].transcript;
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) {
+        finalTranscript += e.results[i][0].transcript;
+      } else {
+        interim += e.results[i][0].transcript;
+      }
+    }
+    // Show interim in input field
     const inp = document.getElementById('ai-text-input');
-    if (inp) inp.value = text;
-    _voiceActive = false;
-    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; btn.style.borderColor = ''; }
-    sendAiMessage(text, null);
+    if (inp) inp.value = finalTranscript + interim;
   };
-  _voiceRecognition.onerror = function() {
-    _voiceActive = false;
-    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; btn.style.borderColor = ''; }
-  };
+
   _voiceRecognition.onend = function() {
     _voiceActive = false;
-    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; btn.style.borderColor = ''; }
+    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = ''; btn.title = 'Голосовой ввод'; }
+    if (finalTranscript.trim()) {
+      const inp = document.getElementById('ai-text-input');
+      if (inp) inp.value = '';
+      sendAiMessage(finalTranscript.trim(), null);
+    }
   };
-  _voiceRecognition.start();
+
+  _voiceRecognition.onerror = function(e) {
+    _voiceActive = false;
+    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = ''; }
+    if (e.error === 'not-allowed') {
+      alert('Доступ к микрофону запрещён. Разреши доступ в настройках браузера.');
+    } else if (e.error === 'no-speech') {
+      // just reset silently
+    } else {
+      console.warn('Voice error:', e.error);
+    }
+  };
+
+  try {
+    _voiceRecognition.start();
+  } catch(err) {
+    _voiceActive = false;
+    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = ''; }
+    console.warn('Voice start error:', err);
+  }
 }
 
 function profileModalHtml() {
@@ -3899,540 +3943,4 @@ function doExportPdf() {
     ? `Период: ${from ? fmtDate(state.exportDateFrom) : '—'} → ${to ? fmtDate(state.exportDateTo) : '—'}`
     : 'Все время';
 
-  const html = `<!DOCTYPE html>
-<html lang="ru"><head><meta charset="UTF-8">
-<title>Выписка</title>
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: Arial, sans-serif; font-size: 12px; color: #111; padding: 24px; }
-  h1 { font-size: 20px; margin-bottom: 4px; }
-  .meta { color:#888; font-size: 12px; margin-bottom: 24px; }
-  h2 { font-size: 15px; margin: 24px 0 10px; border-bottom: 2px solid #111; padding-bottom: 4px; }
-  table { width: 100%; border-collapse: collapse; }
-  th { background: #f0f0f0; padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 2px solid #ccc; }
-  td { padding: 7px 10px; border-bottom: 1px solid #e8e8e8; vertical-align: middle; }
-  tr:nth-child(even) td { background: #fafafa; }
-  .total { font-weight: 700; font-size: 13px; }
-  @media print { body { padding: 0; } }
-</style>
-</head><body>
-<h1>📊 Финансовая выписка</h1>
-<div class="meta">${periodStr} · Сформировано: ${new Date().toLocaleDateString('ru-RU')}</div>
-
-<h2>Операции (${txs.length})</h2>
-<table>
-  <thead><tr><th>Дата</th><th>Тип</th><th>Направление</th><th>Счёт</th><th>Категория</th><th>Комментарий</th><th style="text-align:right">Сумма</th><th style="text-align:right">≈ RUB</th></tr></thead>
-  <tbody>${txRows}</tbody>
-</table>
-
-${showBal ? `<h2>Остатки по счетам</h2>
-<table>
-  <thead><tr><th>Счёт</th><th>Направление</th><th>Валюта</th><th style="text-align:right">Баланс</th><th style="text-align:right">≈ RUB</th></tr></thead>
-  <tbody>${balRows}</tbody>
-</table>` : ''}
-
-
-</body></html>`;
-
-  const win = window.open('', '_blank');
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => { win.print(); }, 400);
-}
-
-function doExportPdf() {
-  const dirs  = state.exportDirs  || Object.keys(DIRECTIONS);
-  const accs  = state.exportAccs  || Object.keys(state.accounts);
-  const from  = state.exportDateFrom ? new Date(state.exportDateFrom) : null;
-  const to    = state.exportDateTo   ? new Date(state.exportDateTo)   : null;
-  const showBal = state.exportShowBalances !== false;
-
-  const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
-  const fmtDate = d => { const p=d.split('-'); return p.length===3?`${parseInt(p[2])} ${MONTHS_GEN[parseInt(p[1])-1]} ${p[0]}`:d; };
-  const typeLabel = t => t==='income'?'Доход':t==='expense'?'Расход':'ДДС';
-  const typeColor = t => t==='income'?'#22c55e':t==='expense'?'#ef4444':'#f59e0b';
-
-  let txs = state.transactions.filter(t => {
-    if (!dirs.includes(t.direction)) return false;
-    if (!accs.includes(t.account))   return false;
-    if (from && new Date(t.date) < from) return false;
-    if (to   && new Date(t.date) > to)   return false;
-    return true;
-  }).sort((a,b) => new Date(a.date)-new Date(b.date));
-
-  const periodStr = (state.exportDateFrom || state.exportDateTo)
-    ? `${state.exportDateFrom ? fmtDate(state.exportDateFrom) : '...'} — ${state.exportDateTo ? fmtDate(state.exportDateTo) : '...'}`
-    : 'Все время';
-
-  const rows = txs.map(t => {
-    const acc = state.accounts[t.account];
-    const dir = DIRECTIONS[t.direction];
-    const sign = t.type==='income' ? '+' : '-';
-    const color = typeColor(t.type);
-    return `<tr>
-      <td>${fmtDate(t.date)}</td>
-      <td><span style="color:${color};font-weight:600">${typeLabel(t.type)}</span></td>
-      <td>${dir ? dir.label : t.direction}</td>
-      <td>${acc ? acc.name : t.account}</td>
-      <td>${t.category}</td>
-      <td style="color:#888">${t.note||''}</td>
-      <td style="text-align:right;font-weight:600;color:${color};font-family:monospace">${sign}${t.amount.toLocaleString('ru')} ${t.currency}</td>
-    </tr>`;
-  }).join('');
-
-  const balRows = showBal ? accs.map(k => {
-    const a = state.accounts[k];
-    if (!a) return '';
-    const dir = DIRECTIONS[a.direction];
-    return `<tr>
-      <td>${a.name}</td>
-      <td>${dir?dir.label:a.direction}</td>
-      <td style="text-align:right;font-family:monospace;font-weight:600">${a.balance.toLocaleString('ru')} ${a.currency}</td>
-    </tr>`;
-  }).join('') : '';
-
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-  <style>
-    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; margin: 24px; }
-    h1 { font-size: 18px; margin-bottom: 4px; }
-    .period { color:#888; font-size: 12px; margin-bottom: 20px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
-    th { background: #f0f0f0; padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 2px solid #ddd; }
-    td { padding: 7px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
-    tr:hover td { background: #fafafa; }
-    h2 { font-size: 14px; margin-bottom: 8px; color: #333; }
-
-
-  </style></head><body>
-  <h1>Финансовая выписка</h1>
-  <div class="period">Период: ${periodStr} · Сформировано: ${new Date().toLocaleDateString('ru')}</div>
-  <h2>Операции (${txs.length})</h2>
-  <table>
-    <thead><tr><th>Дата</th><th>Тип</th><th>Направление</th><th>Счёт</th><th>Категория</th><th>Комментарий</th><th style="text-align:right">Сумма</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-  ${showBal ? `<h2>Остатки по счетам</h2><table><thead><tr><th>Счёт</th><th>Направление</th><th style="text-align:right">Баланс</th></tr></thead><tbody>${balRows}</tbody></table>` : ''}
-  
-</body></html>`;
-
-  const win = window.open('', '_blank');
-  win.document.write(html);
-  win.document.close();
-  setTimeout(() => { win.print(); }, 400);
-}
-
-function doExportExcel() {
-  const dirs  = state.exportDirs  || Object.keys(DIRECTIONS);
-  const accs  = state.exportAccs  || Object.keys(state.accounts);
-  const from  = state.exportDateFrom ? new Date(state.exportDateFrom) : null;
-  const to    = state.exportDateTo   ? new Date(state.exportDateTo)   : null;
-  const showBal = state.exportShowBalances !== false;
-
-  let txs = state.transactions.filter(t => {
-    if (!dirs.includes(t.direction)) return false;
-    if (!accs.includes(t.account))   return false;
-    if (from && new Date(t.date) < from) return false;
-    if (to   && new Date(t.date) > to)   return false;
-    return true;
-  }).sort((a,b) => new Date(a.date)-new Date(b.date));
-
-  const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
-  const fmtDate = d => { const p=d.split('-'); return p.length===3?`${parseInt(p[2])} ${MONTHS_GEN[parseInt(p[1])-1]} ${p[0]}`:d; };
-  const typeLabel = t => t==='income'?'Доход':t==='expense'?'Расход':'ДДС';
-
-  const wb = XLSX.utils.book_new();
-
-  // Sheet 1: Transactions
-  const headers = ['Дата','Тип','Направление','Счёт','Категория','Комментарий','Сумма','Валюта','Сумма RUB'];
-  const rows = txs.map(t => {
-    const acc = state.accounts[t.account];
-    const dir = DIRECTIONS[t.direction];
-    const sign = t.type==='income' ? 1 : -1;
-    return [
-      fmtDate(t.date),
-      typeLabel(t.type),
-      dir ? dir.label : t.direction,
-      acc ? acc.name : t.account,
-      t.category,
-      t.note || '',
-      sign * t.amount,
-      t.currency || 'RUB',
-      sign * toRub(t.amount, t.currency),
-    ];
-  });
-  const ws1 = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  ws1['!cols'] = [16,10,18,20,20,28,14,8,14].map(w=>({wch:w}));
-  XLSX.utils.book_append_sheet(wb, ws1, 'Операции');
-
-  // Sheet 2: Balances as of end of selected period (optional)
-  if (showBal) {
-    // Start from current balance and subtract transactions that happened AFTER the period end
-    const balHeaders = ['Счёт','Направление','Валюта','Остаток на ' + (state.exportDateTo ? fmtDate(state.exportDateTo) : 'сегодня'),'Остаток RUB'];
-    const balRows = accs.map(k => {
-      const a = state.accounts[k];
-      if (!a) return null;
-      const dir = DIRECTIONS[a.direction];
-      let bal = a.balance;
-      if (to) {
-        // Reverse all transactions after the period end date
-        state.transactions.filter(t => t.account === k && new Date(t.date) > to).forEach(t => {
-          const sign = t.type==='income' ? 1 : -1;
-          bal -= sign * t.amount;
-        });
-      }
-      return [a.name, dir?dir.label:a.direction, a.currency, bal, toRub(bal, a.currency)];
-    }).filter(Boolean);
-    const ws2 = XLSX.utils.aoa_to_sheet([balHeaders, ...balRows]);
-    ws2['!cols'] = [22,18,10,18,14].map(w=>({wch:w}));
-    XLSX.utils.book_append_sheet(wb, ws2, 'Остатки');
-  }
-
-  const now = new Date();
-  const fname = `vypiска_${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}.xlsx`;
-  XLSX.writeFile(wb, fname);
-}
-
-document.addEventListener('click', function(e) {
-  // ── Mode picker ──────────────────────────────────
-  if (e.target.closest('#mode-picker-close') || e.target.id === 'mode-picker-bg') {
-    state.showModePicker = false; render(); return;
-  }
-  if (e.target.closest('#mode-manual')) {
-    state.showModePicker = false; state.form = defaultForm(); state.showModal = true; render(); return;
-  }
-  if (e.target.closest('#mode-ai')) {
-    state.showModePicker = false; state.showAiChat = true;
-    if (!state.aiMessages.length) state.aiMessages = [];
-    render(); scrollAiToBottom(); return;
-  }
-
-  // ── AI Chat ──────────────────────────────────────
-  // Prevent scroll bleed from AI chat bg
-  if (e.target.id === 'ai-chat-bg') {
-    e.preventDefault();
-  }
-  if (e.target.closest('#ai-chat-close') || e.target.id === 'ai-chat-bg') {
-    state.showAiChat = false; state.aiPendingTxs = []; document.body.style.overflow = ''; render(); return;
-  }
-  if (e.target.closest('#ai-send-btn')) {
-    const inp = document.getElementById('ai-text-input');
-    const text = inp ? inp.value.trim() : '';
-    if (text) { inp.value = ''; sendAiMessage(text, null); } return;
-  }
-  if (e.target.closest('#ai-confirm-txs')) { confirmAiTxs(); return; }
-  if (e.target.closest('#ai-discard-txs')) { state.aiPendingTxs = []; render(); return; }
-  const aiRemoveBtn = e.target.closest('[data-ai-remove]');
-  if (aiRemoveBtn) {
-    const idx = parseInt(aiRemoveBtn.dataset.aiRemove);
-    state.aiPendingTxs.splice(idx, 1);
-    if (state.aiEditingIdx === idx) state.aiEditingIdx = null;
-    render(); return;
-  }
-
-  // Edit button — open modal
-  const aiEditBtn = e.target.closest('[data-ai-edit]');
-  if (aiEditBtn) {
-    state.aiEditingIdx = parseInt(aiEditBtn.dataset.aiEdit);
-    render(); return;
-  }
-
-  // Cancel edit modal
-  if (e.target.closest('[data-ai-edit-cancel]') || e.target.id === 'ai-edit-modal-bg') {
-    state.aiEditingIdx = null;
-    render(); return;
-  }
-
-  // Save edit modal
-  const aiSaveBtn = e.target.closest('[data-ai-edit-save]');
-  if (aiSaveBtn) {
-    const idx = parseInt(aiSaveBtn.dataset.aiEditSave);
-    const get = id => (document.getElementById(id)||{}).value || '';
-    const tx = state.aiPendingTxs[idx];
-    tx.type     = get('aie-type')     || tx.type;
-    tx.date     = get('aie-date')     || tx.date;
-    tx.account  = get('aie-account')  || tx.account;
-    tx.amount   = parseFloat(get('aie-amount')) || tx.amount;
-    tx.currency = get('aie-currency') || tx.currency;
-    tx.category = get('aie-category') || tx.category;
-    tx.note     = get('aie-note');
-    const acc = state.accounts[tx.account];
-    if (acc) tx.direction = acc.direction;
-    state.aiEditingIdx = null;
-    render(); return;
-  }
-  if (e.target.closest('#ai-voice-btn')) { startVoiceInput(); return; }
-
-  // ── Direct handlers for header buttons (prevent delegation bugs)
-  if (e.target.closest("#btn-profile-dash,#btn-profile-month")) { state.showProfileModal = true; render(); return; }
-  if (e.target.closest("#btn-settings-header,#btn-settings-month")) { state.showSettingsModal = true; render(); return; }
-  if (e.target.closest("#btn-profile-close")) { state.showProfileModal = false; render(); return; }
-  if (e.target.closest("#btn-to-projects")) { window.location.href = "/projects"; return; }
-
-  // Theme toggle
-  const themeBtn = e.target.closest('[data-theme-set]');
-  if (themeBtn) {
-    state.theme = themeBtn.dataset.themeSet;
-    saveToStorage(); applyTheme(); render(); return;
-  }
-
-  // Language toggle
-  const langBtn = e.target.closest('[data-lang-set]');
-  if (langBtn) {
-    state.lang = langBtn.dataset.langSet;
-    saveToStorage(); render(); return;
-  }
-
-  // Type filter toggle
-  const tfBtn = e.target.closest('[data-type-filter]');
-  if (tfBtn) {
-    const type = tfBtn.dataset.typeFilter;
-    const idx = state.txTypeFilter.indexOf(type);
-    if (idx >= 0) {
-      if (state.txTypeFilter.length > 1) state.txTypeFilter.splice(idx, 1);
-    } else {
-      state.txTypeFilter.push(type);
-    }
-    render(); return;
-  }
-
-  // Open tx detail on row click
-  const txRow = e.target.closest('[data-tx-open]');
-  if (txRow && !e.target.closest('button')) {
-    state.showTxDetail = txRow.dataset.txOpen;
-    render(); return;
-  }
-
-  const btn = e.target.closest('button[id],button[data-partner-pay],button[data-partner-manage],button[data-partner-del],button[data-pm-del],button[data-cat-edit],button[data-tx-edit],button[data-tx-del]');
-
-  // Close modals by background click — only if no button was clicked
-  if (!btn) {
-    if (e.target.id === 'partner-manage-bg') { state.showPartnerManage = null; render(); return; }
-    if (e.target.id === 'partner-modal-bg')  { state.showPartnerModal  = null; render(); return; }
-    if (e.target.id === 'settings-modal-bg') { state.showSettingsModal = false; render(); return; }
-    if (e.target.id === 'profile-modal-bg')  { state.showProfileModal  = false; render(); return; }
-    return;
-  }
-
-  // Close buttons
-  if (btn.id === 'partner-manage-close') { state.showPartnerManage = null; render(); return; }
-  if (btn.id === 'partner-modal-close')  { state.showPartnerModal  = null; render(); return; }
-
-  // Add partner
-  if (btn.id === 'btn-pm-add') {
-    const dk = state.showPartnerManage;
-    if (!DIRECTIONS[dk]) return;
-    if (!DIRECTIONS[dk].partners) DIRECTIONS[dk].partners = [];
-    DIRECTIONS[dk].partners.push({ id: 'p_'+Date.now(), name: '', role: '', share: 0 });
-    state.directions = DIRECTIONS; saveToStorage(); render(); return;
-  }
-
-  // Save partners
-  if (btn.id === 'btn-pm-save') {
-    const dk = state.showPartnerManage;
-    if (!DIRECTIONS[dk]) return;
-    // Validate total share <= 100%
-    let totalShare = 0;
-    document.querySelectorAll('[data-pm-share]').forEach(function(inp) { totalShare += parseFloat(inp.value||0); });
-    if (totalShare > 100) { alert('Сумма процентов: ' + totalShare + '%. Максимум 100%'); return; }
-    document.querySelectorAll('[data-pm-name]').forEach(function(inp) {
-      const i = parseInt(inp.dataset.pmName);
-      if (DIRECTIONS[dk].partners[i]) DIRECTIONS[dk].partners[i].name = inp.value;
-    });
-    document.querySelectorAll('[data-pm-role]').forEach(function(inp) {
-      const i = parseInt(inp.dataset.pmRole);
-      if (DIRECTIONS[dk].partners[i]) DIRECTIONS[dk].partners[i].role = inp.value;
-    });
-    document.querySelectorAll('[data-pm-share]').forEach(function(inp) {
-      const i = parseInt(inp.dataset.pmShare);
-      if (DIRECTIONS[dk].partners[i]) DIRECTIONS[dk].partners[i].share = parseFloat(inp.value||0)/100;
-    });
-    state.directions = DIRECTIONS; saveToStorage(); state.showPartnerManage = null; render(); return;
-  }
-
-  // Submit partner payment
-  if (btn.id === 'btn-pp-submit') {
-    const info = state.showPartnerModal;
-    if (!info) return;
-    const accKey = (document.getElementById('pp-account')||{}).value || '';
-    const amt    = parseFloat((document.getElementById('pp-amount')||{}).value||0);
-    const date   = (document.getElementById('pp-date')||{}).value || new Date().toISOString().slice(0,10);
-    const note   = (document.getElementById('pp-note')||{}).value || '';
-    if (!amt || amt <= 0) { alert('Введи сумму'); return; }
-    if (!accKey) { alert('Выбери счёт'); return; }
-    const acc = state.accounts[accKey];
-    if (!acc) { alert('Счёт не найден'); return; }
-
-    const payId = Date.now().toString();
-    const dir = DIRECTIONS[info.dirKey] || {};
-    const txNote = 'Дивиденды · ' + info.partnerName + ' · ' + dir.icon + ' ' + dir.label + (note ? ' · ' + note : '');
-
-    // Deduct from account balance
-    acc.balance -= amt;
-
-    // Create DDS transaction (not income/expense — doesn't affect P&L)
-    state.transactions.push({
-      id: 'div_' + payId,
-      date,
-      type: 'dds_out',
-      direction: acc.direction || info.dirKey,
-      account: accKey,
-      amount: amt,
-      currency: acc.currency,
-      category: 'Дивиденды партнёру',
-      note: txNote,
-      isDividend: true,
-    });
-
-    // Record in partner payments for tracking
-    if (!state.partnerPayments[info.dirKey]) state.partnerPayments[info.dirKey] = {};
-    if (!state.partnerPayments[info.dirKey][info.partnerId]) state.partnerPayments[info.dirKey][info.partnerId] = [];
-    state.partnerPayments[info.dirKey][info.partnerId].push({
-      id: payId, date, amount: amt, note, account: accKey, currency: acc.currency,
-    });
-
-    saveToStorage(); state.showPartnerModal = null; render(); return;
-  }
-
-  // Partner pay button
-  if (btn.dataset.partnerPay !== undefined) {
-    state.showPartnerModal = { dirKey: btn.dataset.partnerPay, partnerId: btn.dataset.partnerId, partnerName: btn.dataset.partnerName };
-    render(); return;
-  }
-  // Partner manage button
-  if (btn.dataset.partnerManage !== undefined) {
-    state.showPartnerManage = btn.dataset.partnerManage;
-    render(); return;
-  }
-  // Delete payment
-  if (btn.dataset.partnerDel !== undefined) {
-    const dk = btn.dataset.partnerDel, pid = btn.dataset.partnerId, payId = btn.dataset.payId;
-    if (state.partnerPayments[dk] && state.partnerPayments[dk][pid]) {
-      state.partnerPayments[dk][pid] = state.partnerPayments[dk][pid].filter(function(p){ return p.id !== payId; });
-      saveToStorage(); render();
-    }
-    return;
-  }
-  // Delete partner row
-  if (btn.dataset.pmDel !== undefined) {
-    const dk = state.showPartnerManage, i = parseInt(btn.dataset.pmDel);
-    if (DIRECTIONS[dk]) {
-      const partner = DIRECTIONS[dk].partners[i];
-      if (partner) {
-        const hasPay = (state.partnerPayments[dk]||{})[partner.id]?.length > 0;
-        if (hasPay) { alert('Нельзя удалить партнёра с историей выплат. Сначала удали все его выплаты.'); return; }
-      }
-      DIRECTIONS[dk].partners.splice(i,1); state.directions=DIRECTIONS; saveToStorage(); render();
-    }
-    return;
-  }
-  // Cat edit gear
-  if (btn.dataset.catEdit !== undefined) {
-    state.showCatEditor = { dirKey: btn.dataset.catEdit, type: btn.dataset.catType };
-    render(); return;
-  }
-
-  // Export modal open
-  if (btn.id === 'btn-export-excel') {
-    state.exportDirs = Object.keys(DIRECTIONS);
-    state.exportAccs = Object.keys(state.accounts);
-    state.exportDateFrom = ''; state.exportDateTo = '';
-    state.exportShowBalances = true;
-    state.showExportModal = true; render(); return;
-  }
-  // Export modal close
-  if (btn.id === 'export-modal-close') { state.showExportModal = false; render(); return; }
-  // Export go
-  if (btn.id === 'btn-export-go' || btn.id === 'btn-export-pdf') {
-    state.exportDateFrom = (document.getElementById('exp-date-from')||{}).value || '';
-    state.exportDateTo   = (document.getElementById('exp-date-to')||{}).value   || '';
-    state.exportShowBalances = document.getElementById('exp-show-balances')?.checked !== false;
-    state.exportDirs = [...document.querySelectorAll('[data-exp-dir]:checked')].map(el=>el.dataset.expDir);
-    state.exportAccs = [...document.querySelectorAll('[data-exp-acc]:checked')].map(el=>el.dataset.expAcc);
-    if (btn.id === 'btn-export-pdf') { doExportPdf(); } else { doExportExcel(); }
-    return;
-  }
-  // Select all/none dirs
-  if (btn.dataset.expSelDir !== undefined) {
-    const all = btn.dataset.expSelDir === 'all';
-    document.querySelectorAll('[data-exp-dir]').forEach(el => el.checked = all);
-    return;
-  }
-  // Select all/none accs
-  if (btn.dataset.expSelAcc !== undefined) {
-    const all = btn.dataset.expSelAcc === 'all';
-    document.querySelectorAll('[data-exp-acc]').forEach(el => el.checked = all);
-    return;
-  }
-
-  // Edit transaction
-  if (btn.dataset.txEdit !== undefined) {
-    state.showTxDetail    = null;
-    state.showEditTxModal = btn.dataset.txEdit;
-    render(); return;
-  }
-
-  // Delete transaction
-  if (btn.dataset.txDel !== undefined) {
-    state.showTxDetail = null;
-    if (!confirm('Удалить операцию?')) return;
-    const tid = btn.dataset.txDel;
-    const tx  = state.transactions.find(t => t.id === tid);
-    if (tx) {
-      // Reverse balance effect
-      const acc = state.accounts[tx.account];
-      if (acc) {
-        if (tx.type === 'income') acc.balance -= tx.amount;
-      else if (!tx.isTransfer && tx.type !== 'transfer') acc.balance += tx.amount;
-        else acc.balance += tx.amount;
-      }
-    }
-    state.transactions = state.transactions.filter(t => t.id !== tid);
-    saveToStorage(); render(); return;
-  }
-
-  // Edit tx modal close
-  if (btn.id === 'edit-tx-close')   { state.showEditTxModal = null; render(); return; }
-  if (btn.id === 'tx-detail-close') { state.showTxDetail    = null; render(); return; }
-
-  // Save edited transaction
-  if (btn.id === 'btn-etx-save') {
-    const tid = state.showEditTxModal;
-    const tx  = state.transactions.find(t => t.id === tid);
-    if (!tx) return;
-    const acc = state.accounts[tx.account];
-    // Reverse old balance effect
-    if (acc) {
-      if (tx.type === 'income') acc.balance -= tx.amount;
-      else if (!tx.isTransfer && tx.type !== 'transfer') acc.balance += tx.amount;
-      else acc.balance += tx.amount;
-    }
-    // Apply new values
-    tx.type      = document.getElementById('etx-type').value;
-    tx.date      = document.getElementById('etx-date').value;
-    tx.direction = document.getElementById('etx-direction').value;
-    tx.account   = document.getElementById('etx-account').value;
-    tx.amount    = parseFloat(document.getElementById('etx-amount').value) || 0;
-    tx.category  = document.getElementById('etx-category').value;
-    tx.note      = document.getElementById('etx-note').value;
-    // Apply new balance effect
-    const newAcc = state.accounts[tx.account];
-    if (newAcc) {
-      if (tx.type === 'income') newAcc.balance += tx.amount;
-      else if (!tx.isTransfer && tx.type !== 'transfer') newAcc.balance -= tx.amount;
-      else newAcc.balance -= tx.amount;
-      tx.currency = newAcc.currency;
-    }
-    saveToStorage(); state.showEditTxModal = null; render(); return;
-  }
-});
-
-// Re-render charts on resize
-window.addEventListener('resize', () => {
-  clearTimeout(window._rt);
-  window._rt = setTimeout(renderCharts, 200);
-});
-</script>
-
-</body>
-</html>
+  const html = `
