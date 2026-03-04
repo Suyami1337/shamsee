@@ -4335,7 +4335,7 @@ function startVoiceInput() {
   let silenceTimer = null;
 
   _voiceRecognition.onstart = function() {
-    // Show listening indicator
+    console.log('[Voice] onstart fired — mic is active');
     const inp = document.getElementById('ai-text-input');
     if (inp && !inp.value) inp.placeholder = '🎤 Говорите...';
   };
@@ -4380,28 +4380,31 @@ function startVoiceInput() {
     clearTimeout(silenceTimer);
     _voiceActive = false;
     setBtnIdle();
+    console.error('[Voice] onerror:', e.error);
     const inp = document.getElementById('ai-text-input');
     if (inp) inp.placeholder = 'Напиши или надиктуй операцию...';
     if (e.error === 'not-allowed') {
       alert('Доступ к микрофону запрещён.\n\nЧтобы разрешить:\n1. Нажми на 🔒 в адресной строке\n2. Найди «Микрофон»\n3. Выбери «Разрешить»\n4. Обнови страницу');
     } else if (e.error === 'no-speech') {
-      // silent — user just didn't say anything
+      alert('Речь не обнаружена — попробуй ещё раз и говори чётче');
     } else if (e.error === 'network') {
-      alert('Ошибка сети при распознавании речи. Проверь подключение к интернету.');
+      alert('Ошибка сети при распознавании речи.');
+    } else if (e.error === 'audio-capture') {
+      alert('Микрофон не найден или недоступен. Проверь подключение микрофона.');
     } else {
-      console.warn('Voice error:', e.error);
+      alert('Ошибка голосового ввода: ' + e.error);
     }
   };
 
   try {
+    console.log('[Voice] calling start()...');
     _voiceRecognition.start();
+    console.log('[Voice] start() called OK');
   } catch(err) {
     _voiceActive = false;
     setBtnIdle();
-    console.warn('Voice start error:', err.message);
-    if (err.message && err.message.includes('already started')) {
-      // recognition already running, ignore
-    }
+    console.error('[Voice] start() error:', err.message);
+    alert('Ошибка запуска микрофона: ' + err.message);
   }
 }
 
