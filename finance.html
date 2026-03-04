@@ -399,7 +399,9 @@ function defaultForm() {
   const firstAccEntry = Object.entries(state.accounts || {}).find(([,a]) => a.direction === firstDir);
   const firstAcc = firstAccEntry ? firstAccEntry[0] : '';
   const firstCur = firstAccEntry ? firstAccEntry[1].currency : 'RUB';
-  return { date: today, type: 'income', direction: firstDir, account: firstAcc, amount: '', currency: firstCur, category: '', note: '' };
+  const secondAccEntry = Object.entries(state.accounts || {}).find(([k]) => k !== firstAcc);
+  const secondAcc = secondAccEntry ? secondAccEntry[0] : '';
+  return { date: today, type: 'income', direction: firstDir, account: firstAcc, toAccount: secondAcc, amount: '', toAmount: '', currency: firstCur, category: '', note: '' };
 }
 
 // ─── PERSISTENCE ───────────────────────────────────────────────────────────
@@ -812,9 +814,9 @@ function accountsHtml() {
           </div>
           <div class="acc-bal"><div class="main">${fmt(a.balance, a.currency)}</div>${subbal}</div>
           <button data-acc-history="${k}" data-acc-dir="${a.direction}" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#888;cursor:pointer;font-size:12px;white-space:nowrap">📋 История</button>
-          <button data-acc-action="transfer" data-acc-key="${k}" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(167,139,250,0.3);background:rgba(167,139,250,0.07);color:#a78bfa;cursor:pointer;font-size:12px;white-space:nowrap">🔄 Перевод</button>
           <button data-acc-action="income" data-acc-key="${k}" data-acc-dir="${a.direction}" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(110,231,183,0.3);background:rgba(110,231,183,0.07);color:#6ee7b7;cursor:pointer;font-size:12px;white-space:nowrap">+ Доход</button>
           <button data-acc-action="expense" data-acc-key="${k}" data-acc-dir="${a.direction}" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.07);color:#f87171;cursor:pointer;font-size:12px;white-space:nowrap">− Расход</button>
+          <button data-acc-action="transfer" data-acc-key="${k}" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(251,191,36,0.3);background:rgba(251,191,36,0.07);color:#fbbf24;cursor:pointer;font-size:12px;white-space:nowrap">🔄 Перевод</button>
         </div>`;
     }).join('');
 
@@ -849,7 +851,7 @@ function accountsHtml() {
 function editTxModalHtml(txId) {
   const t = state.transactions.find(x => x.id === txId);
   if (!t) return '';
-  const typeOpts = [['income','💚 Доход'],['expense','🔴 Расход'],['transfer','🟡 ДДС']]
+  const typeOpts = [['income','💚 Доход'],['expense','🔴 Расход'],['transfer','🟡 Перевод']]
     .map(([v,l]) => `<option value="${v}" ${t.type===v?'selected':''}>${l}</option>`).join('');
   const dirOpts = Object.entries(DIRECTIONS).map(([k,v]) =>
     `<option value="${k}" ${t.direction===k?'selected':''}>${v.icon} ${v.label}</option>`).join('');
@@ -984,7 +986,7 @@ function transactionsHtml() {
   const typeFilters = [
     ['income','💚 Доход','#6ee7b7','rgba(110,231,183,0.12)','rgba(110,231,183,0.3)'],
     ['expense','🔴 Расход','#f87171','rgba(239,68,68,0.12)','rgba(239,68,68,0.3)'],
-    ['transfer','🟡 ДДС','#fbbf24','rgba(251,191,36,0.12)','rgba(251,191,36,0.3)'],
+    ['transfer','🟡 Перевод','#fbbf24','rgba(251,191,36,0.12)','rgba(251,191,36,0.3)'],
   ];
   const typeFilterBar = `<div style="display:flex;gap:8px;padding:8px 16px;flex-wrap:wrap">` +
     typeFilters.map(([type,label,color,bg,border]) => {
@@ -1083,7 +1085,7 @@ function txItemHtml(t) {
     return `
       <div class="tx-item" data-tx-open="${t.id}" style="cursor:pointer;display:flex;align-items:center;gap:12px;padding:20px 16px;border-color:rgba(251,191,36,0.15)">
         <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
-          <span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;border:1px solid rgba(251,191,36,0.3);background:rgba(251,191,36,0.08);color:#fbbf24;display:inline-block;width:fit-content">🔄 ДДС</span>
+          <span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;border:1px solid rgba(251,191,36,0.3);background:rgba(251,191,36,0.08);color:#fbbf24;display:inline-block;width:fit-content">🔄 Перевод</span>
           <div style="font-size:18px;font-weight:600;color:#ccc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.category||'Перевод между счетами'}</div>
           <div style="font-size:13px;color:#888;display:flex;align-items:center;gap:6px">
             <span style="color:#fbbf24">${fromName}</span>
@@ -1768,7 +1770,7 @@ function accModalHtml() {
     <div class="modal-bg" id="acc-modal-bg">
       <div class="modal" style="max-width:440px">
         <div class="modal-header">
-          <span class="modal-title">🔄 Перевод между счетами</span>
+          <span class="modal-title">🔄 Перевод</span>
           <button class="modal-close" id="acc-modal-close">×</button>
         </div>
         <div class="form-grid">
@@ -1975,7 +1977,7 @@ function modalHtml() {
               <select class="form-inp" id="f-type">
                 <option value="income"   ${f.type==='income'  ?'selected':''}>💚 Доход</option>
                 <option value="expense"  ${f.type==='expense' ?'selected':''}>🔴 Расход</option>
-                <option value="transfer" ${f.type==='transfer'?'selected':''}>🟡 ДДС</option>
+                <option value="transfer" ${f.type==='transfer'?'selected':''}>🟡 Перевод</option>
               </select>
             </div>
             <div>
@@ -2037,7 +2039,7 @@ function modalHtml() {
             <select class="form-inp" id="f-category">
               <option value="">— выбрать —</option>
               ${isDDS
-                ? `<optgroup label="ДДС">${CATEGORIES_DDS.map(c=>`<option value="${c}" ${f.category===c?'selected':''}>${c}</option>`).join('')}</optgroup>`
+                ? `<optgroup label="Перевод">${CATEGORIES_DDS.map(c=>`<option value="${c}" ${f.category===c?'selected':''}>${c}</option>`).join('')}</optgroup>`
                 : f.type==='income'
                   ? `<optgroup label="Доходы">${catsIn}</optgroup>`
                   : `<optgroup label="Расходы">${catsOut}</optgroup>`
@@ -2117,7 +2119,7 @@ function aiChatHtml() {
     const typeInfo = {
       income:  { label:'💚 Доход',  color:'#6ee7b7', bg:'rgba(110,231,183,0.12)', border:'rgba(110,231,183,0.3)' },
       expense: { label:'🔴 Расход', color:'#f87171', bg:'rgba(239,68,68,0.12)',   border:'rgba(239,68,68,0.3)' },
-      transfer: { label:'🟡 ДДС', color:'#fbbf24', bg:'rgba(251,191,36,0.12)', border:'rgba(251,191,36,0.3)' },
+      transfer: { label:'🟡 Перевод', color:'#fbbf24', bg:'rgba(251,191,36,0.12)', border:'rgba(251,191,36,0.3)' },
     };
     const rows = state.aiPendingTxs.map((tx, i) => {
       const ti = typeInfo[tx.type] || typeInfo.expense;
@@ -3068,7 +3070,7 @@ function bindEvents() {
     if (!el) return;
     el.oninput = el.onchange = () => {
       const key = id.replace('f-','');
-      state.form[key] = id === 'f-amount' ? el.value.replace(/\s/g,'') : el.value;
+      state.form[key] = (id === 'f-amount' || id === 'f-to-amount') ? el.value.replace(/\s/g,'') : el.value;
       if (id === 'f-type') {
         state.form.category = '';
         render();
@@ -3081,6 +3083,14 @@ function bindEvents() {
       if (id === 'f-account') {
         const acc = state.accounts[el.value];
         if (acc) state.form.currency = acc.currency;
+        if (state.form.type === 'transfer') {
+          // Reset toAccount if it's same as new fromAccount
+          if (state.form.toAccount === el.value) {
+            const other = Object.keys(state.accounts).find(k => k !== el.value);
+            state.form.toAccount = other || '';
+          }
+          render();
+        }
       }
     };
   });
