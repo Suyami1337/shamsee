@@ -2581,7 +2581,12 @@ NEW_FUND_JSON:
         if (!d.key || !d.label) return;
         state.directions[d.key] = { label: d.label, icon: d.icon || '🏢', color: d.color || '#a78bfa', partners: [] };
         DIRECTIONS[d.key] = state.directions[d.key];
-        if (!state.dirCategories[d.key]) state.dirCategories[d.key] = { in: [], out: [] };
+        if (!state.dirCategories[d.key]) {
+          state.dirCategories[d.key] = {
+            in:  [...DEFAULT_CATEGORIES_IN],
+            out: [...DEFAULT_CATEGORIES_OUT]
+          };
+        }
       });
       saveToStorage();
       displayText = (displayText || '') + '\n\n✅ Создано направление: ' + newDirs.map(d => d.icon + ' ' + d.label).join(', ');
@@ -3995,6 +4000,98 @@ function applyTheme() {
   } catch(initErr) {
     document.getElementById('app').innerHTML = '<div style="color:red;padding:40px;font-family:monospace">ОШИБКА ИНИЦИАЛИЗАЦИИ:<br>' + initErr.message + '<br><br>' + initErr.stack + '</div>';
   }
+
+  // ── Transaction click delegation (open detail, edit, delete) ──
+  document.addEventListener('click', function(e) {
+    // Open detail modal when clicking a tx-item card
+    const txCard = e.target.closest('[data-tx-open]');
+    if (txCard && !e.target.closest('[data-tx-edit]') && !e.target.closest('[data-tx-del]')) {
+      state.showTxDetail = txCard.dataset.txOpen;
+      render();
+      return;
+    }
+
+    // Edit button inside detail modal
+    const txEdit = e.target.closest('[data-tx-edit]');
+    if (txEdit) {
+      state.showTxDetail = null;
+      state.showEditTxModal = txEdit.dataset.txEdit;
+      render();
+      return;
+    }
+
+    // Delete button inside detail modal
+    const txDel = e.target.closest('[data-tx-del]');
+    if (txDel) {
+      const txId = txDel.dataset.txDel;
+      if (!confirm('Удалить операцию?')) return;
+      const tx = state.transactions.find(t => t.id === txId);
+      if (tx) {
+        // Reverse balance effect
+        if (tx.type === 'transfer') {
+          const fromAcc = state.accounts[tx.fromAccount];
+          const toAcc   = state.accounts[tx.toAccount];
+          if (fromAcc) fromAcc.balance += parseFloat(tx.fromAmount || tx.amount) || 0;
+          if (toAcc)   toAcc.balance   -= parseFloat(tx.toAmount   || tx.amount) || 0;
+        } else {
+          const acc = state.accounts[tx.account];
+          if (acc) {
+            if (tx.type === 'income')  acc.balance -= parseFloat(tx.amount) || 0;
+            if (tx.type === 'expense') acc.balance += parseFloat(tx.amount) || 0;
+          }
+        }
+        state.transactions = state.transactions.filter(t => t.id !== txId);
+        state.showTxDetail = null;
+        saveToStorage();
+        render();
+      }
+      return;
+    }
+
+    // Save edited transaction
+    if (e.target.id === 'btn-etx-save') {
+      const txId = state.showEditTxModal;
+      const tx = state.transactions.find(t => t.id === txId);
+      if (!tx) return;
+      const g = id => (document.getElementById(id) || {}).value;
+      const newType     = g('etx-type')      || tx.type;
+      const newDate     = g('etx-date')      || tx.date;
+      const newDir      = g('etx-direction') || tx.direction;
+      const newAccount  = g('etx-account')   || tx.account;
+      const newAmount   = parseFloat(g('etx-amount')) || tx.amount;
+      const newCategory = g('etx-category')  || tx.category;
+      const newNote     = document.getElementById('etx-note') ? document.getElementById('etx-note').value : (tx.note || '');
+
+      // Reverse old balance
+      if (tx.type === 'transfer') {
+        const fa = state.accounts[tx.fromAccount]; const ta = state.accounts[tx.toAccount];
+        if (fa) fa.balance += parseFloat(tx.fromAmount || tx.amount) || 0;
+        if (ta) ta.balance -= parseFloat(tx.toAmount   || tx.amount) || 0;
+      } else {
+        const acc = state.accounts[tx.account];
+        if (acc) {
+          if (tx.type === 'income')  acc.balance -= parseFloat(tx.amount) || 0;
+          if (tx.type === 'expense') acc.balance += parseFloat(tx.amount) || 0;
+        }
+      }
+
+      // Apply new balance
+      const newAcc = state.accounts[newAccount];
+      if (newType !== 'transfer' && newAcc) {
+        if (newType === 'income')  newAcc.balance += newAmount;
+        if (newType === 'expense') newAcc.balance -= newAmount;
+      }
+
+      // Update transaction
+      Object.assign(tx, { type: newType, date: newDate, direction: newDir,
+        account: newAccount, amount: newAmount, category: newCategory, note: newNote });
+
+      state.showEditTxModal = null;
+      saveToStorage();
+      render();
+      return;
+    }
+  });
 
   document.addEventListener('keydown', function(e) {
     if (e.target.id !== 'ai-text-input') return;
