@@ -2268,7 +2268,7 @@ async function sendAiMessage(text, imageBase64, imageMediaType) {
   // Add user message
   state.aiMessages.push({ role: 'user', text, image: imageBase64 ? `data:\${imageMediaType||'image/jpeg'};base64,\${imageBase64}` : null });
   state.aiMessages.push({ role: 'typing' });
-  try { sessionStorage.setItem('ai_chat_history', JSON.stringify({ messages: state.aiMessages.filter(m=>m.role!=='typing'), ts: Date.now(), projectId: _projectId })); } catch(e) {}
+  try { const msgsSafe = state.aiMessages.filter(m=>m.role!=='typing').map(m=>({...m, image: m.image ? '[img]' : null})); sessionStorage.setItem('ai_chat_history', JSON.stringify({ messages: msgsSafe, ts: Date.now(), projectId: _projectId })); } catch(e) {}
   render(); scrollAiToBottom();
 
   // Build context about user's project
@@ -2410,26 +2410,20 @@ NEW_FUND_JSON:
 
     const apiMessages = [];
     // Add conversation history (skip typing indicators)
-    // Keep last 12 messages. Include images from last 4 user messages to preserve context.
+    // Keep last 12 messages. NEVER send images from history - only text+placeholder.
+    // Images corrupt when stored/restored, so only the CURRENT message can have an image.
     const histMsgs = state.aiMessages.filter(m => m.role !== 'typing').slice(0, -1).slice(-12);
-    // Find how many user messages are in history to decide which get images
-    const userMsgIndices = histMsgs.map((m,i) => m.role==='user' ? i : -1).filter(i=>i>=0);
-    const recentUserIndices = new Set(userMsgIndices.slice(-4)); // last 4 user messages keep image
-    histMsgs.forEach((m, idx) => {
+    histMsgs.forEach((m) => {
       if (m.role === 'user') {
         const content = [];
-        if (m.image && recentUserIndices.has(idx)) {
-          const b64 = m.image.split(',')[1];
-          const rawMt = m.image.split(';')[0].split(':')[1] || 'image/jpeg';
-          const allowedTypes = ['image/jpeg','image/png','image/gif','image/webp'];
-          const mt = allowedTypes.includes(rawMt) ? rawMt : 'image/jpeg';
-          content.push({ type: 'image', source: { type: 'base64', media_type: mt, data: b64 } });
-        } else if (m.image && !recentUserIndices.has(idx)) {
-          // Replace old image with text placeholder so AI knows it was there
-          content.push({ type: 'text', text: '[ранее был прикреплён скриншот]' });
+        // Always replace history images with placeholder text - never send raw base64 from history
+        if (m.image && m.image !== '[img]') {
+          content.push({ type: 'text', text: '[пользователь прикреплял скриншот в этом сообщении]' });
+        } else if (m.image === '[img]') {
+          content.push({ type: 'text', text: '[пользователь прикреплял скриншот в этом сообщении]' });
         }
         if (m.text) content.push({ type: 'text', text: m.text });
-        if (content.length === 0) content.push({ type: 'text', text: '[изображение]' });
+        if (content.length === 0) content.push({ type: 'text', text: '...' });
         apiMessages.push({ role: 'user', content });
       } else {
         apiMessages.push({ role: 'assistant', content: m.text || '...' });
@@ -2578,11 +2572,11 @@ NEW_FUND_JSON:
     } else {
       state.aiMessages.push({ role: 'assistant', text: displayText || fullText || '...' });
     }
-    try { sessionStorage.setItem('ai_chat_history', JSON.stringify({ messages: state.aiMessages, ts: Date.now(), projectId: _projectId })); } catch(e) {}
+    try { const msgsSafe = state.aiMessages.map(m=>({...m, image: m.image ? '[img]' : null})); sessionStorage.setItem('ai_chat_history', JSON.stringify({ messages: msgsSafe, ts: Date.now(), projectId: _projectId })); } catch(e) {}
   } catch(e) {
     state.aiMessages = state.aiMessages.filter(m => m.role !== 'typing');
     state.aiMessages.push({ role: 'assistant', text: '⚠️ Ошибка: ' + e.message });
-    try { sessionStorage.setItem('ai_chat_history', JSON.stringify({ messages: state.aiMessages, ts: Date.now(), projectId: _projectId })); } catch(e) {}
+    try { const msgsSafe = state.aiMessages.map(m=>({...m, image: m.image ? '[img]' : null})); sessionStorage.setItem('ai_chat_history', JSON.stringify({ messages: msgsSafe, ts: Date.now(), projectId: _projectId })); } catch(e) {}
   }
   render(); scrollAiToBottom();
 }
