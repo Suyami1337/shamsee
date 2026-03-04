@@ -1175,6 +1175,15 @@ function txDetailModalHtml(txId) {
     </div>`;
   }
 
+  function fmtDateTime(ms) {
+    if (!ms) return '—';
+    const d = new Date(ms);
+    const pad = n => String(n).padStart(2,'0');
+    const months = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+    return d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear()
+      + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
   let amountBlock, rowsHtml;
 
   if (t.type === 'transfer') {
@@ -1201,7 +1210,10 @@ function txDetailModalHtml(txId) {
       fromAmt !== toAmt ? row('Сумма зачисления', fmt(toAmt, toCur)) : '',
       row('Категория', t.category),
       t.note ? row('Комментарий', t.note) : '',
-      row('Дата', dateFormatted),
+      row('Дата операции', dateFormatted),
+      '<div style="height:1px;background:rgba(255,255,255,0.04);margin:4px 0"></div>',
+      row('Добавлена', fmtDateTime(t.createdAtMs || t.createdAt)),
+      t.updatedAtMs ? row('Изменена', fmtDateTime(t.updatedAtMs)) : row('Изменена', '—'),
     ].join('');
   } else {
     const acc = state.accounts[t.account];
@@ -1224,9 +1236,12 @@ function txDetailModalHtml(txId) {
       row('Тип', typeLabel),
       row('Категория', t.category),
       t.note ? row('Комментарий', t.note) : '',
-      row('Дата', dateFormatted),
+      row('Дата операции', dateFormatted),
       row('Направление', dirName),
       row('Счёт', accName),
+      '<div style="height:1px;background:rgba(255,255,255,0.04);margin:4px 0"></div>',
+      row('Добавлена', fmtDateTime(t.createdAtMs || t.createdAt)),
+      t.updatedAtMs ? row('Изменена', fmtDateTime(t.updatedAtMs)) : row('Изменена', '—'),
     ].join('');
   }
 
@@ -3180,7 +3195,7 @@ function bindEvents() {
       fromDirection: fromAcc.direction, toDirection: toAcc.direction,
       fromAmount: fromAmt, toAmount: toAmt,
       fromCurrency: fromAcc.currency, toCurrency: toAcc.currency,
-      category: catVal, note, createdAt: Date.now(),
+      category: catVal, note, createdAt: Date.now(), createdAtMs: Date.now(), updatedAtMs: null,
       isTransfer: true
     });
 
@@ -3437,14 +3452,14 @@ function bindEvents() {
         fromDirection: fromAcc.direction, toDirection: toAcc.direction,
         fromAmount: fromAmt, toAmount: toAmt,
         fromCurrency: currency, toCurrency: toAcc.currency,
-        category, note, createdAt: Date.now(), isTransfer: true
+        category, note, createdAt: Date.now(), createdAtMs: Date.now(), updatedAtMs: null, isTransfer: true
       });
     } else {
       const tx = {
         id, date, type, direction, account,
         amount: parseFloat(rawAmt),
         currency, category, note,
-        createdAt: Date.now(),
+        createdAt: Date.now(), createdAtMs: Date.now(), updatedAtMs: null,
       };
       state.transactions.push(tx);
       const acc = state.accounts[tx.account];
@@ -3633,7 +3648,7 @@ function bindEvents() {
           state.transactions.push({
             ...tx,
             id: 'tr_' + uid,
-            createdAt: Date.now() + i,
+            createdAt: Date.now() + i, createdAtMs: Date.now(), updatedAtMs: null,
             isTransfer: true,
             fromAmount: fromAmt,
             toAmount: toAmt,
@@ -3654,7 +3669,7 @@ function bindEvents() {
           state.transactions.push({
             ...tx,
             id: uid,
-            createdAt: Date.now() + i,
+            createdAt: Date.now() + i, createdAtMs: Date.now(), updatedAtMs: null,
             amount: amt,
             currency: tx.currency || acc.currency || 'RUB',
           });
@@ -4326,6 +4341,7 @@ function applyTheme() {
         });
       }
 
+      tx.updatedAtMs = Date.now();
       state.showEditTxModal = null;
       saveToStorage();
       render();
