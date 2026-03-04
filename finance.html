@@ -2398,17 +2398,22 @@ NEW_FUND_JSON:
 
     const apiMessages = [];
     // Add conversation history (skip typing indicators)
-    state.aiMessages.filter(m => m.role !== 'typing').slice(0, -1).forEach(m => {
+    // Only keep last 10 messages in history, strip old images to avoid payload bloat
+    const histMsgs = state.aiMessages.filter(m => m.role !== 'typing').slice(0, -1).slice(-10);
+    histMsgs.forEach((m, idx) => {
       if (m.role === 'user') {
         const content = [];
-        if (m.image) {
+        // Only include image if it's one of the last 2 user messages
+        if (m.image && idx >= histMsgs.length - 2) {
           const b64 = m.image.split(',')[1];
-          content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } });
+          const mt = m.image.split(';')[0].split(':')[1] || 'image/jpeg';
+          content.push({ type: 'image', source: { type: 'base64', media_type: mt, data: b64 } });
         }
         if (m.text) content.push({ type: 'text', text: m.text });
+        if (content.length === 0) content.push({ type: 'text', text: '[изображение]' });
         apiMessages.push({ role: 'user', content });
       } else {
-        apiMessages.push({ role: 'assistant', content: m.text });
+        apiMessages.push({ role: 'assistant', content: m.text || '...' });
       }
     });
     apiMessages.push({ role: 'user', content: userContent });
@@ -3479,6 +3484,17 @@ function bindEvents() {
   if (aiMessages) {
     aiMessages.addEventListener('wheel', (e) => { e.stopPropagation(); }, { passive: true });
     aiMessages.addEventListener('touchmove', (e) => { e.stopPropagation(); }, { passive: true });
+  }
+
+  // ── Restore voice button visual state after re-render ──
+  if (_voiceActive) {
+    const vBtn = document.getElementById('ai-voice-btn');
+    if (vBtn) {
+      vBtn.textContent = '⏹';
+      vBtn.style.background = 'rgba(239,68,68,0.25)';
+      vBtn.style.borderColor = 'rgba(239,68,68,0.5)';
+      vBtn.style.color = '#f87171';
+    }
   }
 }
 
