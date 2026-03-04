@@ -264,8 +264,7 @@ async function cloudLoad() {
     return data ? data.data : null;
   } catch(e) { console.error('cloudLoad exception:', e); return null; }
 }
-</script>
-<script>
+
 // ─── DATA ──────────────────────────────────────────────────────────────────
 
 const DEFAULT_DIRECTIONS = {
@@ -3956,4 +3955,34 @@ function doExportPdf() {
     ? `Период: ${from ? fmtDate(state.exportDateFrom) : '—'} → ${to ? fmtDate(state.exportDateTo) : '—'}`
     : 'Все время';
 
-  const html = `
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>MyFinanceAI — Выписка</title>
+  <style>
+    body{font-family:Arial,sans-serif;padding:24px;color:#111}
+    h1{font-size:20px;margin-bottom:4px}
+    .sub{color:#666;font-size:13px;margin-bottom:20px}
+    table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:32px}
+    th{background:#f3f4f6;text-align:left;padding:8px 10px;border-bottom:2px solid #e5e7eb;font-weight:600}
+    td{padding:7px 10px;border-bottom:1px solid #f0f0f0}
+    h2{font-size:15px;margin-bottom:8px;color:#374151}
+  </style></head><body>
+  <h1>📊 Финансовая выписка — MyFinanceAI</h1>
+  <div class="sub">${periodStr} · Сформировано: ${new Date().toLocaleDateString('ru')}</div>
+  <h2>Операции</h2>
+  <table>
+    <thead><tr><th>Дата</th><th>Тип</th><th>Направление</th><th>Счёт</th><th>Категория</th><th>Комментарий</th><th>Сумма</th><th>≈RUB</th></tr></thead>
+    <tbody>${txRows}</tbody>
+  </table>
+  ${showBal ? '<h2>Балансы счётов</h2><table><thead><tr><th>Счёт</th><th>Направление</th><th>Валюта</th><th>Баланс</th><th>≈RUB</th></tr></thead><tbody>'+balRows+'</tbody></table>' : ''}
+  </body></html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  setTimeout(() => win.print(), 500);
+}
+</script>
+</body>
+</html>
+</body>
+</html>
