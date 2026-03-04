@@ -994,7 +994,7 @@ function transactionsHtml() {
     }).join('') + `</div>`;
 
   if (!state.activeDir) {
-    const sorted = [...monthTxs()].filter(t => !t.isFundTarget && state.txTypeFilter.includes(t.type)).sort((a,b) => new Date(b.date) - new Date(a.date));
+    const sorted = [...monthTxs()].filter(t => !t.isFundTarget && state.txTypeFilter.includes(t.type)).sort((a,b) => { const dd = new Date(b.date) - new Date(a.date); return dd !== 0 ? dd : (b.createdAt||0) - (a.createdAt||0); });
     const txHtml = sorted.length === 0
       ? `<div class="empty">Нет операций. Нажмите «+ Операция» чтобы начать!</div>`
       : sorted.slice(0,100).map(t => txItemHtml(t)).join('');
@@ -1016,7 +1016,7 @@ function transactionsHtml() {
         <div style="font-size:12px;margin-top:2px;color:${f.color}">${fmt(f.balance)}</div>
       </button>`).join('');
     const fundTxs = monthTxs().filter(t => t.isFund && t.fundKey === activeFund && t.isFundTarget);
-    const sorted = [...fundTxs].filter(t => state.txTypeFilter.includes(t.type)).sort((a,b) => new Date(b.date)-new Date(a.date));
+    const sorted = [...fundTxs].filter(t => state.txTypeFilter.includes(t.type)).sort((a,b) => { const dd = new Date(b.date)-new Date(a.date); return dd !== 0 ? dd : (b.createdAt||0)-(a.createdAt||0); });
     const txHtml = sorted.length === 0
       ? `<div class="empty">Нет операций по этому фонду</div>`
       : sorted.map(t => txItemHtml(t)).join('');
@@ -1048,7 +1048,7 @@ function transactionsHtml() {
     : monthTxs().filter(t => t.direction === state.activeDir);
 
   const filtered = allForDir.filter(t => !t.isFundTarget);
-  const sorted = [...filtered].filter(t => state.txTypeFilter.includes(t.type)).sort((a,b) => new Date(b.date) - new Date(a.date));
+  const sorted = [...filtered].filter(t => state.txTypeFilter.includes(t.type)).sort((a,b) => { const dd = new Date(b.date) - new Date(a.date); return dd !== 0 ? dd : (b.createdAt||0)-(a.createdAt||0); });
 
   const txHtml = sorted.length === 0
     ? `<div class="empty">Нет операций по этому счёту</div>`
@@ -2133,35 +2133,91 @@ async function sendAiMessage(text, imageBase64) {
   const catIn   = Object.entries(state.directions).map(([k]) => `${k}: ${(state.dirCategories[k]||{}).in||[]}`).join('; ');
   const catOut  = Object.entries(state.directions).map(([k]) => `${k}: ${(state.dirCategories[k]||{}).out||[]}`).join('; ');
 
-  const systemPrompt = `Ты AI-помощник финансового приложения MyFinanceAI. Помогаешь пользователю записывать финансовые операции.
+  const systemPrompt = `Ты AI-помощник финансового приложения MyFinanceAI. Твоя задача — точно записывать финансовые операции пользователя.
 
-ДАННЫЕ ПРОЕКТА:
+═══ ДАННЫЕ ПРОЕКТА ═══
 Направления: ${dirList}
 Счета: ${accList}
-Категории доходов: ${catIn}
-Категории расходов: ${catOut}
+Категории доходов по направлениям: ${catIn}
+Категории расходов по направлениям: ${catOut}
 Активный месяц: ${state.activeMonth || 'текущий'}
+Дата сегодня: ${new Date().toISOString().slice(0,10)}
 
-ТВОЯ ЗАДАЧА:
-1. Понять из сообщения пользователя одну или несколько финансовых операций
-2. Если информации достаточно — сформировать JSON с операциями
-3. Если чего-то не хватает (сумма, тип, счёт, категория) — задать уточняющий вопрос
-4. Общаться на русском языке, кратко и по делу
+═══ ТИПЫ ОПЕРАЦИЙ (очень важно понимать логику) ═══
 
-ФОРМАТ ОТВЕТА когда операции готовы:
-Сначала краткое подтверждение текстом, затем JSON блок:
+1. ДОХОД (type: "income") — деньги пришли извне на счёт.
+   Пример: получил зарплату, клиент оплатил, дивиденды поступили.
+
+2. РАСХОД (type: "expense") — деньги ушли со счёта на внешние нужды.
+   Пример: купил продукты, заплатил за аренду, оплатил подписку.
+
+3. ДДС+ (type: "dds_in") — деньги ПРИШЛИ на счёт, но это НЕ доход (движение денег между счетами).
+   Пример: перевод между своими счетами (получающая сторона), снятие наличных (приход на счёт "Наличные").
+
+4. ДДС− (type: "dds_out") — деньги УШЛИ со счёта, но это НЕ расход (движение денег между счетами).
+   Пример: перевод между своими счетами (отправляющая сторона), снятие наличных (уход с карты).
+
+═══ ПРАВИЛО ПЕРЕВОДОВ И СНЯТИЙ НАЛИЧНЫХ ═══
+Когда деньги перемещаются МЕЖДУ СЧЕТАМИ пользователя — всегда создавай ДВЕ операции:
+- ДДС− на счёте-отправителе (откуда ушли деньги)
+- ДДС+ на счёте-получателе (куда пришли деньги)
+
+Примеры:
+• "снял наличные 10000 с карты" → ДДС− на карте + ДДС+ на счёте наличных
+• "перевёл 5000 с личной карты на бизнес счёт" → ДДС− личная карта + ДДС+ бизнес счёт
+• "положил деньги на карту" → ДДС− наличные + ДДС+ карта
+
+═══ ПРАВИЛА УТОЧНЕНИЯ ═══
+ВСЕГДА уточняй если неясно:
+- С какого СЧЁТА (если счётов несколько в направлении — обязательно спроси)
+- С какого НАПРАВЛЕНИЯ (если направлений несколько — обязательно спроси)
+- Сумму (если не указана)
+- Категорию (предложи варианты из существующих)
+
+НЕ надо уточнять если:
+- Счёт/направление только один и всё очевидно
+- Пользователь явно указал счёт или направление
+
+═══ ФОРМАТ ОТВЕТА ═══
+Сначала краткое подтверждение на русском, затем JSON:
+
 TRANSACTIONS_JSON:
-[{"type":"income|expense|dds_in|dds_out","amount":1000,"currency":"RUB","direction":"personal","account":"personal_card","category":"Зарплата","date":"2026-03-03","note":""}]
+[{"type":"income|expense|dds_in|dds_out","amount":1000,"currency":"RUB","direction":"ключ_направления","account":"ключ_счёта","category":"Название категории","date":"2026-03-03","note":"комментарий"}]
 
-Если нужно создать новую категорию (пользователь явно просит или категория не существует и он хочет новую):
-Добавь в ответ блок:
+Если нужна новая категория — добавь отдельный блок ПЕРЕД транзакциями:
 NEW_CATEGORIES_JSON:
-[{"dirKey":"personal","type":"out","name":"Донат"}]
+[{"dirKey":"ключ_направления","type":"in|out","name":"Название категории"}]
 
-type может быть "in" (доход) или "out" (расход).
-Используй только существующие ключи направлений и счетов из списка выше.
-Если пользователь описывает несколько операций — создай несколько объектов в массиве.
-Дата по умолчанию: ${new Date().toISOString().slice(0,10)}`;
+═══ СОЗДАНИЕ НОВЫХ СУЩНОСТЕЙ ═══
+Если пользователь называет направление/счёт/фонд которого нет — предложи создать его и ОБЯЗАТЕЛЬНО спроси подтверждение.
+После подтверждения добавь соответствующий JSON блок.
+
+Для нового направления:
+NEW_DIRECTION_JSON:
+[{"key":"уникальный_ключ","label":"Название","icon":"🏢","color":"#a78bfa"}]
+
+Для нового счёта:
+NEW_ACCOUNT_JSON:
+[{"key":"уникальный_ключ","name":"Название счёта","direction":"ключ_направления","currency":"RUB","icon":"💳"}]
+
+Для нового фонда:
+NEW_FUND_JSON:
+[{"key":"уникальный_ключ","name":"Название фонда","currency":"RUB","icon":"💰","color":"#a78bfa"}]
+
+Ключи должны быть латиницей без пробелов, уникальными (например: "business", "alfa_card", "reserve_fund").
+
+═══ ПРАВИЛО КОММЕНТАРИЯ ПРИ ПЕРЕВОДАХ ═══
+При переводе между счетами ВСЕГДА заполняй поле note автоматически:
+- Для ДДС− (откуда): "Перевод → [название счёта получателя]"
+- Для ДДС+ (куда): "Перевод ← [название счёта отправителя]"
+Пример: снял наличные с Личной карты на Наличные:
+- ДДС− карта: note = "Перевод → Наличные"
+- ДДС+ наличные: note = "Перевод ← Личная карта"
+
+ВАЖНО:
+- При создании новых сущностей — сначала NEW_*_JSON, потом TRANSACTIONS_JSON
+- direction счёта должен совпадать с существующим или новым направлением
+- Всегда отвечай на русском языке, кратко и по делу`;
 
   try {
     // Build messages for built-in Claude API (no key needed)
@@ -2240,6 +2296,65 @@ type может быть "in" (доход) или "out" (расход).
       }
     }
 
+    // Extract NEW_DIRECTION_JSON
+    let newDirs = null;
+    if (fullText.includes('NEW_DIRECTION_JSON:')) {
+      try {
+        const part = fullText.split('NEW_DIRECTION_JSON:')[1].split(/NEW_[A-Z]+_JSON:|TRANSACTIONS_JSON:|NEW_CATEGORIES_JSON:/)[0].trim();
+        newDirs = JSON.parse(part);
+      } catch(e) {}
+    }
+
+    // Extract NEW_ACCOUNT_JSON
+    let newAccs = null;
+    if (fullText.includes('NEW_ACCOUNT_JSON:')) {
+      try {
+        const part = fullText.split('NEW_ACCOUNT_JSON:')[1].split(/NEW_[A-Z]+_JSON:|TRANSACTIONS_JSON:|NEW_CATEGORIES_JSON:/)[0].trim();
+        newAccs = JSON.parse(part);
+      } catch(e) {}
+    }
+
+    // Extract NEW_FUND_JSON
+    let newFunds = null;
+    if (fullText.includes('NEW_FUND_JSON:')) {
+      try {
+        const part = fullText.split('NEW_FUND_JSON:')[1].split(/NEW_[A-Z]+_JSON:|TRANSACTIONS_JSON:|NEW_CATEGORIES_JSON:/)[0].trim();
+        newFunds = JSON.parse(part);
+      } catch(e) {}
+    }
+
+    // Apply new directions
+    if (newDirs && Array.isArray(newDirs)) {
+      newDirs.forEach(d => {
+        if (!d.key || !d.label) return;
+        state.directions[d.key] = { label: d.label, icon: d.icon || '🏢', color: d.color || '#a78bfa', partners: [] };
+        DIRECTIONS[d.key] = state.directions[d.key];
+        if (!state.dirCategories[d.key]) state.dirCategories[d.key] = { in: [], out: [] };
+      });
+      saveToStorage();
+      displayText = (displayText || '') + '\n\n✅ Создано направление: ' + newDirs.map(d => d.icon + ' ' + d.label).join(', ');
+    }
+
+    // Apply new accounts
+    if (newAccs && Array.isArray(newAccs)) {
+      newAccs.forEach(a => {
+        if (!a.key || !a.name || !a.direction) return;
+        state.accounts[a.key] = { name: (a.icon || '💳') + ' ' + a.name, direction: a.direction, currency: a.currency || 'RUB', balance: 0 };
+      });
+      saveToStorage();
+      displayText = (displayText || '') + '\n\n✅ Создан счёт: ' + newAccs.map(a => a.name).join(', ');
+    }
+
+    // Apply new funds
+    if (newFunds && Array.isArray(newFunds)) {
+      newFunds.forEach(f => {
+        if (!f.key || !f.name) return;
+        state.funds[f.key] = { name: f.name, balance: 0, currency: f.currency || 'RUB', icon: f.icon || '💰', color: f.color || '#a78bfa' };
+      });
+      saveToStorage();
+      displayText = (displayText || '') + '\n\n✅ Создан фонд: ' + newFunds.map(f => f.name).join(', ');
+    }
+
     // Apply new categories immediately
     if (newCats && Array.isArray(newCats)) {
       newCats.forEach(cat => {
@@ -2282,7 +2397,7 @@ function confirmAiTxs() {
     state.transactions.push({
       id, date: tx.date || today, type: tx.type, direction: tx.direction,
       account: tx.account, amount, currency: tx.currency || 'RUB',
-      category: tx.category || '', note: tx.note || ''
+      category: tx.category || '', note: tx.note || '', createdAt: Date.now()
     });
   });
   state.aiPendingTxs = [];
@@ -2918,6 +3033,7 @@ function bindEvents() {
       date, type, direction, account,
       amount: parseFloat(rawAmt),
       currency, category, note,
+      createdAt: Date.now(),
     };
     state.transactions.push(tx);
     const acc = state.accounts[tx.account];
