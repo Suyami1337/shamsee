@@ -2466,9 +2466,20 @@ TRANSACTIONS_JSON для переводов:
 
 Можно смешивать разные типы в одном массиве TRANSACTIONS_JSON.
 
-Если нужна новая категория — добавь отдельный блок ПЕРЕД транзакциями:
+⚠️ КАТЕГОРИИ — СТРОГИЕ ПРАВИЛА:
+- ЗАПРЕЩЕНО придумывать или создавать новые категории самостоятельно без явного согласования с пользователем
+- Используй ТОЛЬКО категории из списка выше для данного направления
+- Если категория не очевидна — спроси пользователя и предложи варианты из существующего списка
+- Если категория не названа — ОБЯЗАТЕЛЬНО уточни, не угадывай
+- Только если пользователь явно попросил создать новую категорию и подтвердил её название — используй блок ниже:
 NEW_CATEGORIES_JSON:
 [{"dirKey":"ключ_направления","type":"in|out","name":"Название категории"}]
+
+⚠️ ОБЯЗАТЕЛЬНЫЕ ПОЛЯ — операция НЕ может быть создана без:
+- amount (сумма > 0) — если не указана, уточни
+- category — если не ясна, предложи варианты из списка и уточни
+- account / fromAccount+toAccount — если не ясен, уточни
+- date — если не указана, используй сегодняшнюю дату
 
 ═══ СОЗДАНИЕ НОВЫХ СУЩНОСТЕЙ ═══
 Если пользователь называет направление/счёт/фонд которого нет — предложи создать его и ОБЯЗАТЕЛЬНО спроси подтверждение.
@@ -3602,6 +3613,7 @@ function bindEvents() {
     const txsToSave = [...state.aiPendingTxs]; // snapshot before clearing
     let added = 0;
     const errors = [];
+    const savedIds = []; // track IDs we attempted to save
     txsToSave.forEach((tx, i) => {
       // Unique id: timestamp + index + random to avoid collisions
       // i=0 is first/newest → gets highest createdAt so it sorts to top
@@ -3612,24 +3624,29 @@ function bindEvents() {
           const toAcc   = state.accounts[tx.toAccount];
           if (!fromAcc) { errors.push(`#${i+1}: счёт "${tx.fromAccount}" не найден`); return; }
           if (!toAcc)   { errors.push(`#${i+1}: счёт "${tx.toAccount}" не найден`); return; }
+          if (!tx.category) { errors.push(`#${i+1}: не указана категория перевода`); return; }
           const fromAmt = parseFloat(tx.fromAmount || tx.amount) || 0;
           const toAmt   = parseFloat(tx.toAmount   || tx.amount) || 0;
+          if (fromAmt <= 0) { errors.push(`#${i+1}: некорректная сумма`); return; }
           fromAcc.balance -= fromAmt;
           toAcc.balance   += toAmt;
           state.transactions.push({
             ...tx,
             id: 'tr_' + uid,
-            createdAt: Date.now() + (txsToSave.length - i),
+            createdAt: Date.now() + i,
             isTransfer: true,
             fromAmount: fromAmt,
             toAmount: toAmt,
             fromCurrency: tx.fromCurrency || fromAcc.currency || 'RUB',
             toCurrency:   tx.toCurrency   || toAcc.currency   || 'RUB',
           });
+          savedIds.push('tr_' + uid);
           added++;
         } else if (tx.type === 'income' || tx.type === 'expense') {
           const acc = state.accounts[tx.account];
           if (!acc) { errors.push(`#${i+1}: счёт "${tx.account}" не найден`); return; }
+          if (!tx.category) { errors.push(`#${i+1}: не указана категория`); return; }
+          if (!tx.direction) { errors.push(`#${i+1}: не указано направление`); return; }
           const amt = parseFloat(tx.amount) || 0;
           if (amt <= 0) { errors.push(`#${i+1}: некорректная сумма`); return; }
           if (tx.type === 'income')  acc.balance += amt;
@@ -3637,10 +3654,11 @@ function bindEvents() {
           state.transactions.push({
             ...tx,
             id: uid,
-            createdAt: Date.now() + (txsToSave.length - i),
+            createdAt: Date.now() + i,
             amount: amt,
             currency: tx.currency || acc.currency || 'RUB',
           });
+          savedIds.push(uid);
           added++;
         } else {
           errors.push(`#${i+1}: неизвестный тип "${tx.type}"`);
@@ -3650,14 +3668,39 @@ function bindEvents() {
       }
     });
 
-    if (added > 0) {
-      saveToStorage(); // triggers cloudSave via debounce
+    // Verify IDs actually landed in state.transactions
+    const verifiedIds = new Set(state.transactions.map(t => t.id));
+    const reallyAdded  = savedIds.filter(id => verifiedIds.has(id)).length;
+    const missingCount = savedIds.length - reallyAdded;
+    if (missingCount > 0) errors.push(missingCount + ' операций не появились в списке — ошибка записи');
+
+    if (reallyAdded > 0) saveToStorage();
+
+    // Only clear pending if ALL saved successfully — keep failed ones for correction
+    if (errors.length === 0) {
+      state.aiPendingTxs = [];
+    } else {
+      // Remove only the successfully saved ones, keep failed ones in pending
+      state.aiPendingTxs = txsToSave.filter((tx, i) => {
+        const uid = savedIds[savedIds.indexOf(savedIds.find((id,si) => si === i))];
+        return !uid || !verifiedIds.has(uid);
+      });
+      // Simpler: keep only txs whose index had an error
+      const failedIndices = new Set(errors.map(e => {
+        const m = e.match(/^#(\d+)/);
+        return m ? parseInt(m[1]) - 1 : -1;
+      }));
+      state.aiPendingTxs = txsToSave.filter((_, i) => failedIndices.has(i));
     }
 
-    state.aiPendingTxs = [];
-    const msg = added > 0
-      ? `✅ Сохранено ${added} операций!` + (errors.length ? `\n⚠️ Пропущено: ${errors.join('; ')}` : '')
-      : `⚠️ Ничего не сохранено. Ошибки:\n${errors.join('\n')}`;
+    let msg;
+    if (reallyAdded > 0 && errors.length === 0) {
+      msg = '✅ Сохранено ' + reallyAdded + ' операций — все успешно появились в списке.';
+    } else if (reallyAdded > 0) {
+      msg = '✅ Сохранено ' + reallyAdded + ' операций.\n⚠️ Не сохранены (остались в списке для исправления):\n' + errors.map(function(e){return '• '+e;}).join('\n');
+    } else {
+      msg = '❌ Ничего не сохранено — операции остались в списке.\nОшибки:\n' + errors.map(function(e){return '• '+e;}).join('\n');
+    }
     state.aiMessages.push({ role: 'assistant', text: msg });
     try { const ms = state.aiMessages.map(m=>({...m,image:m.image?'[img]':null})); sessionStorage.setItem('ai_chat_history', JSON.stringify({messages:ms,ts:Date.now(),projectId:_projectId})); } catch(e) {}
     render();
@@ -4545,6 +4588,7 @@ function settingsModalHtml() {
           <div style="font-size:17px;font-weight:800;color:#f87171;margin-bottom:10px">⚠️ Опасная зона</div>
           <p style="font-size:13px;color:#555;margin-bottom:14px">Это действие необратимо. Все транзакции, счета, фонды и настройки будут удалены.</p>
           <button id="btn-clear-txs" style="width:100%;padding:12px;border-radius:10px;border:1px solid rgba(251,191,36,0.3);background:rgba(251,191,36,0.07);color:#fbbf24;font-size:14px;font-weight:600;cursor:pointer">🧹 Очистить операции за этот месяц</button>
+          <div style="margin-top:20px"></div>
           <button id="btn-reset" style="width:100%;padding:12px;border-radius:10px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.07);color:#f87171;font-size:14px;font-weight:600;cursor:pointer">🗑 Сбросить все данные</button>
         </div>
 
