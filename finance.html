@@ -2477,9 +2477,16 @@ NEW_FUND_JSON:
     });
     apiMessages.push({ role: 'user', content: userContent });
 
+    // Get current session token to prove user is logged in
+    const { data: { session } } = await _SB.auth.getSession();
+    const authToken = session ? session.access_token : null;
+
     const resp = await fetch('/.netlify/functions/claude', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken ? { 'Authorization': 'Bearer ' + authToken } : {})
+      },
       body: JSON.stringify({
         system: systemPrompt,
         messages: apiMessages,
@@ -3486,7 +3493,8 @@ function bindEvents() {
     const errors = [];
     txsToSave.forEach((tx, i) => {
       // Unique id: timestamp + index + random to avoid collisions
-      const uid = (Date.now() + i).toString() + '_' + Math.random().toString(36).slice(2,7);
+      // i=0 is first/newest → gets highest createdAt so it sorts to top
+      const uid = (Date.now() + (txsToSave.length - i)).toString() + '_' + Math.random().toString(36).slice(2,7);
       try {
         if (tx.type === 'transfer') {
           const fromAcc = state.accounts[tx.fromAccount];
@@ -3500,7 +3508,7 @@ function bindEvents() {
           state.transactions.push({
             ...tx,
             id: 'tr_' + uid,
-            createdAt: Date.now() + i,
+            createdAt: Date.now() + (txsToSave.length - i),
             isTransfer: true,
             fromAmount: fromAmt,
             toAmount: toAmt,
@@ -3518,7 +3526,7 @@ function bindEvents() {
           state.transactions.push({
             ...tx,
             id: uid,
-            createdAt: Date.now() + i,
+            createdAt: Date.now() + (txsToSave.length - i),
             amount: amt,
             currency: tx.currency || acc.currency || 'RUB',
           });
