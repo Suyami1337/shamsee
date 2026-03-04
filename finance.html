@@ -3608,7 +3608,17 @@ function applyTheme() {
   if (!authed) return;
   document.getElementById('app').innerHTML = '<div style="color:#888;padding:40px;font-family:monospace">Шаг 2: cloudLoad...</div>';
 
-  const cloudData = await cloudLoad();
+  let cloudData = null;
+  try {
+    cloudData = await Promise.race([
+      cloudLoad(),
+      new Promise((_,reject) => setTimeout(() => reject(new Error('cloudLoad timeout 10s')), 10000))
+    ]);
+  } catch(e) {
+    document.getElementById('app').innerHTML = '<div style="color:orange;padding:40px;font-family:monospace">cloudLoad ошибка: ' + e.message + '</div>';
+    // Continue with empty state anyway
+    cloudData = null;
+  }
 
   if (cloudData && Object.keys(cloudData).length > 0) {
     // Restore from cloud — never overwrite existing data with empty values
