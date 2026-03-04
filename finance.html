@@ -2198,7 +2198,8 @@ function aiChatHtml() {
     const allAccounts = Object.entries(state.accounts);
     const allDirs = Object.entries(state.directions || DIRECTIONS);
 
-    const rows = state.aiPendingTxs.map((tx, i) => {
+    const pendingTxs = state.aiPendingTxs;
+    const rows = [...pendingTxs].reverse().map((tx, origI) => { const i = pendingTxs.length - 1 - origI; tx = pendingTxs[i];
       const ti = typeInfo[tx.type] || typeInfo.expense;
       const dateStr = tx.date ? (() => { const dp=(tx.date||'').split('-'); const M=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']; return dp.length===3?parseInt(dp[2])+' '+M[parseInt(dp[1])-1]:tx.date; })() : '';
 
@@ -2222,7 +2223,7 @@ function aiChatHtml() {
       }
 
       return `<div class="tx-item" style="margin-bottom:8px;position:relative;cursor:default">
-        <div style="position:absolute;top:8px;left:12px;font-size:11px;font-weight:700;color:#444;z-index:1">#${i+1}</div>
+        <div style="position:absolute;top:8px;left:12px;font-size:11px;font-weight:700;color:#444;z-index:1">#${pendingTxs.length - i}</div>
         <div style="position:absolute;top:8px;right:36px;display:flex;gap:4px;z-index:1">
           <button data-ai-edit="${i}" style="width:22px;height:22px;border-radius:6px;border:1px solid rgba(167,139,250,0.3);background:rgba(167,139,250,0.07);color:#a78bfa;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">⚙</button>
         </div>
@@ -2736,6 +2737,38 @@ function bindEvents() {
   const btnRates = document.getElementById('btn-rates');
   const btnAdd = document.getElementById('btn-add');
   if (btnRates) btnRates.onclick = () => { state.showRates = true; render(); };
+  const btnClearTxs = document.getElementById('btn-clear-txs');
+  if (btnClearTxs) btnClearTxs.onclick = async () => {
+    const month = state.activeMonth || new Date().toISOString().slice(0,7);
+    const [y, m] = month.split('-');
+    const monthName = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'][parseInt(m)-1];
+    const count = state.transactions.filter(t => (t.date||'').startsWith(month)).length;
+    if (!confirm(`Удалить все операции за ${monthName} ${y}?\n\nБудет удалено: ${count} операций.\nНаправления, счета, фонды и категории останутся.`)) return;
+
+    // Remove transactions for this month
+    state.transactions = state.transactions.filter(t => !(t.date||'').startsWith(month));
+
+    // Recalculate account balances from scratch
+    Object.values(state.accounts).forEach(a => { a.balance = 0; });
+    state.transactions.forEach(t => {
+      if (t.type === 'transfer' || t.isTransfer) {
+        const fa = state.accounts[t.fromAccount];
+        const ta = state.accounts[t.toAccount];
+        if (fa) fa.balance -= parseFloat(t.fromAmount || t.amount) || 0;
+        if (ta) ta.balance += parseFloat(t.toAmount   || t.amount) || 0;
+      } else if (t.type === 'income') {
+        const a = state.accounts[t.account]; if (a) a.balance += parseFloat(t.amount) || 0;
+      } else if (t.type === 'expense') {
+        const a = state.accounts[t.account]; if (a) a.balance -= parseFloat(t.amount) || 0;
+      }
+    });
+
+    await saveToStorage();
+    state.showSettingsModal = false;
+    render();
+    alert(`✅ Операции за ${monthName} ${y} удалены. Балансы пересчитаны.`);
+  };
+
   const btnReset = document.getElementById('btn-reset');
   if (btnReset) btnReset.onclick = async () => {
     if (confirm('Сбросить все данные до заводских настроек? Это действие необратимо!')) {
@@ -4511,6 +4544,7 @@ function settingsModalHtml() {
         <div style="padding:24px;border-radius:16px;border:1px solid rgba(239,68,68,0.2);background:rgba(239,68,68,0.05)">
           <div style="font-size:17px;font-weight:800;color:#f87171;margin-bottom:10px">⚠️ Опасная зона</div>
           <p style="font-size:13px;color:#555;margin-bottom:14px">Это действие необратимо. Все транзакции, счета, фонды и настройки будут удалены.</p>
+          <button id="btn-clear-txs" style="width:100%;padding:12px;border-radius:10px;border:1px solid rgba(251,191,36,0.3);background:rgba(251,191,36,0.07);color:#fbbf24;font-size:14px;font-weight:600;cursor:pointer">🧹 Очистить операции за этот месяц</button>
           <button id="btn-reset" style="width:100%;padding:12px;border-radius:10px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.07);color:#f87171;font-size:14px;font-weight:600;cursor:pointer">🗑 Сбросить все данные</button>
         </div>
 
