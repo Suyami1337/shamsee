@@ -3603,8 +3603,11 @@ function applyTheme() {
 
 // ── Init with cloud ──────────────────────────────
 (async () => {
+  try {
+  document.getElementById('app').innerHTML = '<div style="color:#888;padding:40px;font-family:monospace">Шаг 1: initAuth...</div>';
   const authed = await initAuth();
   if (!authed) return;
+  document.getElementById('app').innerHTML = '<div style="color:#888;padding:40px;font-family:monospace">Шаг 2: cloudLoad...</div>';
 
   const cloudData = await cloudLoad();
 
@@ -3639,6 +3642,7 @@ function applyTheme() {
   DIRECTIONS = state.directions;
 
   applyTheme();
+  document.getElementById('app').innerHTML = '<div style="color:#888;padding:40px;font-family:monospace">Шаг 3: render()...</div>';
   render();
 
   // ── AI Chat: image upload handler (survives re-renders via delegation) ──
@@ -3660,6 +3664,10 @@ function applyTheme() {
   });
 
   // ── AI Chat: Enter to send (Shift+Enter = newline) ──
+  } catch(initErr) {
+    document.getElementById('app').innerHTML = '<div style="color:red;padding:40px;font-family:monospace">ОШИБКА ИНИЦИАЛИЗАЦИИ:<br>' + initErr.message + '<br><br>' + initErr.stack + '</div>';
+  }
+
   document.addEventListener('keydown', function(e) {
     if (e.target.id !== 'ai-text-input') return;
     if (e.key === 'Enter' && !e.shiftKey) {
