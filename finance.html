@@ -3337,6 +3337,128 @@ function bindEvents() {
     state.showRates = false;
     render();
   };
+
+  // ── Mode Picker buttons ──
+  const modePickerClose = document.getElementById('mode-picker-close');
+  const modePickerBg    = document.getElementById('mode-picker-bg');
+  const modeManual      = document.getElementById('mode-manual');
+  const modeAi          = document.getElementById('mode-ai');
+  if (modePickerClose) modePickerClose.onclick = () => { state.showModePicker = false; render(); };
+  if (modePickerBg)    modePickerBg.onclick = (e) => { if (e.target === modePickerBg) { state.showModePicker = false; render(); } };
+  if (modeManual) modeManual.onclick = () => {
+    state.showModePicker = false;
+    state.showModal = true;
+    state.form = { type:'expense', date: state.activeMonth ? state.activeMonth+'-01' : new Date().toISOString().slice(0,10), direction: Object.keys(state.directions)[0]||'personal', account:'', currency:'RUB', category:'', note:'', amount:'', toAccount:'', toAmount:'' };
+    render();
+  };
+  if (modeAi) modeAi.onclick = () => {
+    state.showModePicker = false;
+    state.showAiChat = true;
+    if (!state.aiMessages || state.aiMessages.length === 0) {
+      state.aiMessages = [{ role: 'assistant', text: 'Привет! Опиши операции текстом, голосом или прикрепи скриншот выписки 📎' }];
+    }
+    document.body.style.overflow = 'hidden';
+    render();
+    scrollAiToBottom();
+  };
+
+  // ── AI Chat buttons ──
+  const aiChatClose  = document.getElementById('ai-chat-close');
+  const aiChatBg     = document.getElementById('ai-chat-bg');
+  const aiSendBtn    = document.getElementById('ai-send-btn');
+  const aiVoiceBtn2  = document.getElementById('ai-voice-btn');
+  const aiConfirmBtn = document.getElementById('ai-confirm-txs');
+  const aiDiscardBtn = document.getElementById('ai-discard-txs');
+
+  if (aiChatClose) aiChatClose.onclick = () => {
+    state.showAiChat = false; state.aiPendingTxs = [];
+    document.body.style.overflow = '';
+    render();
+  };
+  if (aiChatBg) aiChatBg.onclick = (e) => {
+    if (e.target === aiChatBg) {
+      state.showAiChat = false; state.aiPendingTxs = [];
+      document.body.style.overflow = '';
+      render();
+    }
+  };
+  if (aiSendBtn) aiSendBtn.onclick = () => {
+    const inp = document.getElementById('ai-text-input');
+    const text = inp ? inp.value.trim() : '';
+    if (text) { inp.value = ''; inp.style.height = '42px'; sendAiMessage(text, null); }
+  };
+  if (aiVoiceBtn2) aiVoiceBtn2.onclick = () => startVoiceInput();
+  if (aiConfirmBtn) aiConfirmBtn.onclick = () => {
+    state.aiPendingTxs.forEach(tx => {
+      if (tx.type === 'transfer') {
+        const fromAcc = state.accounts[tx.fromAccount];
+        const toAcc   = state.accounts[tx.toAccount];
+        if (fromAcc && toAcc) {
+          fromAcc.balance -= tx.fromAmount || tx.amount;
+          toAcc.balance   += tx.toAmount   || tx.amount;
+          state.transactions.push({ ...tx, id: 'tr_'+Date.now()+'_'+Math.random().toString(36).slice(2), createdAt: Date.now(), isTransfer: true });
+        }
+      } else {
+        const acc = state.accounts[tx.account];
+        if (acc) {
+          if (tx.type === 'income')  acc.balance += parseFloat(tx.amount);
+          if (tx.type === 'expense') acc.balance -= parseFloat(tx.amount);
+        }
+        state.transactions.push({ ...tx, id: Date.now().toString()+'_'+Math.random().toString(36).slice(2), createdAt: Date.now() });
+      }
+    });
+    saveToStorage();
+    const cnt = state.aiPendingTxs.length;
+    state.aiPendingTxs = [];
+    state.aiMessages.push({ role: 'assistant', text: `✅ Сохранено ${cnt} операций!` });
+    render();
+    scrollAiToBottom();
+  };
+  if (aiDiscardBtn) aiDiscardBtn.onclick = () => { state.aiPendingTxs = []; render(); };
+
+  // ── AI inline edit buttons ──
+  document.querySelectorAll('[data-ai-edit]').forEach(btn => {
+    if (btn.dataset.aiEditSave !== undefined) return;
+    btn.onclick = () => { state.aiEditingIdx = parseInt(btn.dataset.aiEdit); render(); scrollAiToBottom(); };
+  });
+  document.querySelectorAll('[data-ai-edit-cancel]').forEach(btn => {
+    btn.onclick = () => { state.aiEditingIdx = null; render(); };
+  });
+  document.querySelectorAll('[data-ai-edit-save]').forEach(btn => {
+    btn.onclick = () => {
+      const idx = parseInt(btn.dataset.aiEditSave);
+      const tx = state.aiPendingTxs[idx];
+      if (!tx) { state.aiEditingIdx = null; render(); return; }
+      const g = id => (document.getElementById(id)||{}).value;
+      const type     = g('aie-type')     || tx.type;
+      const date     = g('aie-date')     || tx.date;
+      const account  = g('aie-account')  || tx.account;
+      const amount   = parseFloat(g('aie-amount')) || tx.amount;
+      const currency = g('aie-currency') || tx.currency;
+      const category = g('aie-category') || tx.category;
+      const note     = g('aie-note') !== undefined ? g('aie-note') : (tx.note||'');
+      const acc = state.accounts[account];
+      state.aiPendingTxs[idx] = { ...tx, type, date, account, amount, currency, category, note,
+        direction: acc ? acc.direction : tx.direction };
+      state.aiEditingIdx = null;
+      render();
+    };
+  });
+  document.querySelectorAll('[data-ai-remove]').forEach(btn => {
+    btn.onclick = () => {
+      const idx = parseInt(btn.dataset.aiRemove);
+      state.aiPendingTxs.splice(idx, 1);
+      if (state.aiEditingIdx === idx) state.aiEditingIdx = null;
+      render();
+    };
+  });
+
+  // ── Fix AI chat scroll: prevent bg scroll, allow messages scroll ──
+  const aiMessages = document.getElementById('ai-chat-messages');
+  if (aiMessages) {
+    aiMessages.addEventListener('wheel', (e) => { e.stopPropagation(); }, { passive: true });
+    aiMessages.addEventListener('touchmove', (e) => { e.stopPropagation(); }, { passive: true });
+  }
 }
 
 // ─── CHARTS (Canvas) ───────────────────────────────────────────────────────
