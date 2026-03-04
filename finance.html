@@ -1136,31 +1136,73 @@ function txItemHtml(t) {
 function txDetailModalHtml(txId) {
   const t = state.transactions.find(x => x.id === txId);
   if (!t) return '';
-  const acc  = state.accounts[t.account];
-  const dir  = DIRECTIONS[t.direction];
-  const sign = (t.type === 'income' || t.type === 'dds_in') ? '+' : '-';
-  const amtColor = t.type==='income'?'#6ee7b7':t.type==='expense'?'#f87171':t.type==='dds_in'?'#93c5fd':'#fbbf24';
-  const typeLabel = t.type==='income'?'💚 Доход':t.type==='expense'?'🔴 Расход':t.type==='dds_in'?'🔵 ДДС+':'🟡 ДДС−';
   const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
   const dp = t.date ? t.date.split('-') : [];
-  const dateFormatted = dp.length===3 ? `${parseInt(dp[2])} ${MONTHS_GEN[parseInt(dp[1])-1]} ${dp[0]}` : t.date;
-  const rows = [
-    ['Тип',         typeLabel],
-    ['Категория',   t.category],
-    t.note ? ['Комментарий', t.note, true] : null,
-    ['Дата',        dateFormatted],
-    ['Направление', dir ? dir.icon+' '+dir.label : t.direction],
-    ['Счёт',        acc ? acc.name : t.account],
-  ].filter(Boolean).map(([k,v,wide]) => wide
-    ? `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.07)">
-        <span style="font-size:13px;color:#555;flex-shrink:0;margin-right:24px">${k}</span>
-        <span style="font-size:13px;color:#ccc;text-align:right">${v}</span>
-      </div>`
-    : `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.07)">
-        <span style="font-size:13px;color:#555;flex-shrink:0;margin-right:24px">${k}</span>
-        <span style="font-size:13px;color:#ccc;text-align:right">${v}</span>
-      </div>`
-  ).join('');
+  const dateFormatted = dp.length===3 ? `${parseInt(dp[2])} ${MONTHS_GEN[parseInt(dp[1])-1]} ${dp[0]}` : (t.date||'—');
+
+  function row(label, value) {
+    if (!value && value !== 0) return '';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.07)">
+      <span style="font-size:13px;color:#555;flex-shrink:0;margin-right:24px">${label}</span>
+      <span style="font-size:13px;color:#ccc;text-align:right">${value}</span>
+    </div>`;
+  }
+
+  let amountBlock, rowsHtml;
+
+  if (t.type === 'transfer') {
+    const fromAcc = state.accounts[t.fromAccount];
+    const toAcc   = state.accounts[t.toAccount];
+    const fromName = fromAcc ? fromAcc.name : (t.fromAccount || '—');
+    const toName   = toAcc   ? toAcc.name   : (t.toAccount   || '—');
+    const fromAmt  = parseFloat(t.fromAmount || t.amount) || 0;
+    const toAmt    = parseFloat(t.toAmount   || t.amount) || 0;
+    const fromCur  = t.fromCurrency || (fromAcc && fromAcc.currency) || 'RUB';
+    const toCur    = t.toCurrency   || (toAcc   && toAcc.currency)   || 'RUB';
+    const sameAmt  = fromAmt === toAmt && fromCur === toCur;
+    amountBlock = `
+      <div style="text-align:center;padding:20px 0 16px">
+        <div style="font-size:28px;font-weight:800;font-family:monospace;color:#fbbf24">${fmt(fromAmt, fromCur)}</div>
+        <div style="font-size:13px;color:#555;margin-top:6px">${fromName} → ${toName}</div>
+        ${!sameAmt ? `<div style="font-size:13px;color:#6ee7b7;margin-top:4px">= ${fmt(toAmt, toCur)}</div>` : ''}
+      </div>`;
+    rowsHtml = [
+      row('Тип', '🟡 Перевод'),
+      row('Откуда', fromName),
+      row('Куда', toName),
+      fromAmt !== toAmt ? row('Сумма списания', fmt(fromAmt, fromCur)) : '',
+      fromAmt !== toAmt ? row('Сумма зачисления', fmt(toAmt, toCur)) : '',
+      row('Категория', t.category),
+      t.note ? row('Комментарий', t.note) : '',
+      row('Дата', dateFormatted),
+    ].join('');
+  } else {
+    const acc = state.accounts[t.account];
+    const dir = (state.directions || DIRECTIONS)[t.direction] || DIRECTIONS[t.direction];
+    const accName = acc ? acc.name : (t.account || '—');
+    const dirName = dir ? dir.icon + ' ' + dir.label : (t.direction || '—');
+    const isIncome = t.type === 'income' || t.type === 'dds_in';
+    const sign = isIncome ? '+' : '-';
+    const amtColor = t.type==='income' ? '#6ee7b7' : t.type==='expense' ? '#f87171' : '#fbbf24';
+    const typeLabel = t.type==='income' ? '💚 Доход' : t.type==='expense' ? '🔴 Расход'
+                    : t.type==='dds_in' ? '🔵 ДДС+' : t.type==='dds_out' ? '🟡 ДДС−' : t.type;
+    const amt = parseFloat(t.amount) || 0;
+    const cur = t.currency || 'RUB';
+    amountBlock = `
+      <div style="text-align:center;padding:20px 0 16px">
+        <div style="font-size:32px;font-weight:800;font-family:monospace;color:${amtColor}">${sign}${fmt(amt, cur)}</div>
+        ${cur !== 'RUB' ? `<div style="font-size:13px;color:#555;margin-top:4px">≈ ${fmt(toRub(amt, cur))} RUB</div>` : ''}
+      </div>`;
+    rowsHtml = [
+      row('Тип', typeLabel),
+      row('Категория', t.category),
+      t.note ? row('Комментарий', t.note) : '',
+      row('Дата', dateFormatted),
+      row('Направление', dirName),
+      row('Счёт', accName),
+    ].join('');
+  }
+
   return `
     <div class="modal-bg" id="tx-detail-bg">
       <div class="modal" style="max-width:520px">
@@ -1169,11 +1211,8 @@ function txDetailModalHtml(txId) {
           <button class="modal-close" id="tx-detail-close">×</button>
         </div>
         <div style="padding:0 20px 8px">
-          <div style="text-align:center;padding:20px 0 16px">
-            <div style="font-size:32px;font-weight:800;font-family:monospace;color:${amtColor}">${sign}${fmt(t.amount, t.currency)}</div>
-            ${t.currency!=='RUB'?`<div style="font-size:13px;color:#555;margin-top:4px">≈ ${fmt(toRub(t.amount,t.currency))} RUB</div>`:''}
-          </div>
-          ${rows}
+          ${amountBlock}
+          ${rowsHtml}
         </div>
         <div style="padding:16px 20px;display:flex;gap:10px">
           <button data-tx-edit="${t.id}" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#ccc;cursor:pointer;font-size:13px">✏️ Редактировать</button>
