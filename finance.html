@@ -1316,7 +1316,7 @@ function partnerSectionHtml(dirKey, profit) {
     <div style="padding:16px 20px 8px">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div style="font-size:13px;font-weight:600;color:#aaa">🤝 Партнёрские отчисления</div>
-        <button data-partner-manage="${dirKey}" style="padding:4px 10px;border-radius:7px;border:1px solid rgba(167,139,250,0.3);background:rgba(167,139,250,0.07);color:#a78bfa;cursor:pointer;font-size:12px">⚙️ Управление партнёрами</button>
+        <button data-partner-manage="${dirKey}" style="padding:4px 10px;border-radius:7px;border:1px solid rgba(251,191,36,0.3);background:rgba(251,191,36,0.07);color:#fbbf24;cursor:pointer;font-size:12px">⚙️ Управление партнёрами</button>
       </div>
     </div>
     ${partnerBlocks}`;
@@ -2777,6 +2777,8 @@ function bindEvents() {
   // Profile modal: close button
   var bpc = document.getElementById('btn-profile-close');
   if (bpc) bpc.onclick = function() { state.showProfileModal = false; render(); };
+  const profileModalBg = document.getElementById('profile-modal-bg');
+  if (profileModalBg) profileModalBg.onclick = e => { if (e.target === profileModalBg) { state.showProfileModal = false; render(); } };
 
   // Profile modal: change password
   var bcp = document.getElementById('btn-change-password');
@@ -2794,6 +2796,8 @@ function bindEvents() {
   // Settings modal close
   const btnSettingsClose = document.getElementById('btn-settings-close');
   if (btnSettingsClose) btnSettingsClose.onclick = () => { state.showSettingsModal = false; render(); };
+  const settingsModalBg = document.getElementById('settings-modal-bg');
+  if (settingsModalBg) settingsModalBg.onclick = e => { if (e.target === settingsModalBg) { state.showSettingsModal = false; render(); } };
 
   // Settings: save currencies & rates
   const btnSaveCur = document.getElementById('btn-save-currencies');
@@ -4069,6 +4073,20 @@ function applyTheme() {
 
   // ── Transaction click delegation (open detail, edit, delete) ──
   document.addEventListener('click', function(e) {
+    // Partner manage button
+    const partnerManageBtn = e.target.closest('[data-partner-manage]');
+    if (partnerManageBtn) {
+      state.showPartnerManage = partnerManageBtn.dataset.partnerManage;
+      render();
+      return;
+    }
+    // Partner manage modal close & bg
+    if (e.target.id === 'partner-manage-close') {
+      state.showPartnerManage = null; render(); return;
+    }
+    if (e.target.id === 'partner-manage-bg') {
+      state.showPartnerManage = null; render(); return;
+    }
     // Open detail modal when clicking a tx-item card
     const txCard = e.target.closest('[data-tx-open]');
     if (txCard && !e.target.closest('[data-tx-edit]') && !e.target.closest('[data-tx-del]')) {
