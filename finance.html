@@ -858,51 +858,78 @@ function accountsHtml() {
 function editTxModalHtml(txId) {
   const t = state.transactions.find(x => x.id === txId);
   if (!t) return '';
+  const allAccOpts = Object.entries(state.accounts).map(([k,a]) =>
+    `<option value="${k}">${a.name} (${a.currency})</option>`).join('');
+  const accOptsFor = (selKey) => Object.entries(state.accounts)
+    .map(([k,a]) => `<option value="${k}" ${k===selKey?'selected':''}>${a.name} (${a.currency})</option>`).join('');
   const typeOpts = [['income','💚 Доход'],['expense','🔴 Расход'],['transfer','🟡 Перевод']]
     .map(([v,l]) => `<option value="${v}" ${t.type===v?'selected':''}>${l}</option>`).join('');
-  const dirOpts = Object.entries(DIRECTIONS).map(([k,v]) =>
-    `<option value="${k}" ${t.direction===k?'selected':''}>${v.icon} ${v.label}</option>`).join('');
-  const accOpts = Object.entries(state.accounts).map(([k,a]) =>
-    `<option value="${k}" ${t.account===k?'selected':''}>${a.name} (${a.currency})</option>`).join('');
-  const catOpts = [...CATEGORIES_DDS, ...getDirCats(t.direction,'in'), ...getDirCats(t.direction,'out')]
-    .filter((c,i,a)=>a.indexOf(c)===i)
-    .map(c => `<option value="${c}" ${t.category===c?'selected':''}>${c}</option>`).join('');
+  const date = t.date || '';
+  const note = (t.note||'').replace(/"/g,'&quot;');
+
+  let fieldsHtml;
+  if (t.type === 'transfer') {
+    const fromKey = t.fromAccount || t.account || '';
+    const toKey   = t.toAccount   || '';
+    const fromAmt = t.fromAmount  || t.amount || '';
+    const toAmt   = t.toAmount    || t.fromAmount || t.amount || '';
+    const catOpts = CATEGORIES_DDS.map(c =>
+      `<option value="${c}" ${t.category===c?'selected':''}>${c}</option>`).join('');
+    fieldsHtml = `
+      <div><div class="form-label">Откуда (списание)</div>
+        <select class="form-inp" id="etx-from-account">${accOptsFor(fromKey)}</select></div>
+      <div><div class="form-label">Куда (зачисление)</div>
+        <select class="form-inp" id="etx-to-account">${accOptsFor(toKey)}</select></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div><div class="form-label">Сумма списания</div>
+          <input type="number" class="form-inp" id="etx-from-amount" value="${fromAmt}"></div>
+        <div><div class="form-label">Сумма зачисления</div>
+          <input type="number" class="form-inp" id="etx-to-amount" value="${toAmt}"></div>
+      </div>
+      <div><div class="form-label">Категория</div>
+        <select class="form-inp" id="etx-category">${catOpts}</select></div>`;
+  } else {
+    const dirOpts = Object.entries(state.directions || DIRECTIONS).map(([k,v]) =>
+      `<option value="${k}" ${t.direction===k?'selected':''}>${v.icon} ${v.label}</option>`).join('');
+    const accKey = t.account || '';
+    const catOpts = [...getDirCats(t.direction,'in'), ...getDirCats(t.direction,'out')]
+      .filter((c,i,a)=>a.indexOf(c)===i)
+      .map(c => `<option value="${c}" ${t.category===c?'selected':''}>${c}</option>`).join('');
+    fieldsHtml = `
+      <div><div class="form-label">Направление</div>
+        <select class="form-inp" id="etx-direction">${dirOpts}</select></div>
+      <div><div class="form-label">Счёт</div>
+        <select class="form-inp" id="etx-account">${accOptsFor(accKey)}</select></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div><div class="form-label">Сумма</div>
+          <input type="number" class="form-inp" id="etx-amount" value="${t.amount||''}"></div>
+        <div><div class="form-label">Валюта</div>
+          <select class="form-inp" id="etx-currency">
+            ${(state.enabledCurrencies||['RUB','SAR','USDT']).map(cur =>
+              `<option value="${cur}" ${(t.currency||'RUB')===cur?'selected':''}>${cur}</option>`).join('')}
+          </select></div>
+      </div>
+      <div><div class="form-label">Категория</div>
+        <select class="form-inp" id="etx-category">${catOpts}</select></div>`;
+  }
+
   return `
     <div class="modal-bg" id="edit-tx-bg">
-      <div class="modal" style="max-width:420px">
+      <div class="modal" style="max-width:440px">
         <div class="modal-header">
           <span class="modal-title">✏️ Редактировать операцию</span>
           <button class="modal-close" id="edit-tx-close">×</button>
         </div>
         <div class="form-grid">
-          <div>
-            <div class="form-label">Тип</div>
-            <select class="form-inp" id="etx-type">${typeOpts}</select>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div><div class="form-label">Тип</div>
+              <select class="form-inp" id="etx-type">${typeOpts}</select></div>
+            <div><div class="form-label">Дата</div>
+              <input type="date" class="form-inp" id="etx-date" value="${date}"></div>
           </div>
-          <div>
-            <div class="form-label">Дата</div>
-            <input type="date" class="form-inp" id="etx-date" value="${t.date}">
-          </div>
-          <div>
-            <div class="form-label">Направление</div>
-            <select class="form-inp" id="etx-direction">${dirOpts}</select>
-          </div>
-          <div>
-            <div class="form-label">Счёт</div>
-            <select class="form-inp" id="etx-account">${accOpts}</select>
-          </div>
-          <div>
-            <div class="form-label">Сумма</div>
-            <input type="number" class="form-inp" id="etx-amount" value="${t.amount}">
-          </div>
-          <div>
-            <div class="form-label">Категория</div>
-            <select class="form-inp" id="etx-category">${catOpts}</select>
-          </div>
-          <div>
-            <div class="form-label">Комментарий</div>
-            <input type="text" class="form-inp" id="etx-note" value="${t.note||''}">
-          </div>
+          ${fieldsHtml}
+          <div><div class="form-label">Комментарий</div>
+            <input type="text" class="form-inp" id="etx-note" value="${note}"></div>
           <button class="btn-submit" id="btn-etx-save">Сохранить</button>
         </div>
       </div>
@@ -4092,18 +4119,17 @@ function applyTheme() {
       const txId = state.showEditTxModal;
       const tx = state.transactions.find(t => t.id === txId);
       if (!tx) return;
-      const g = id => (document.getElementById(id) || {}).value;
-      const newType     = g('etx-type')      || tx.type;
-      const newDate     = g('etx-date')      || tx.date;
-      const newDir      = g('etx-direction') || tx.direction;
-      const newAccount  = g('etx-account')   || tx.account;
-      const newAmount   = parseFloat(g('etx-amount')) || tx.amount;
-      const newCategory = g('etx-category')  || tx.category;
-      const newNote     = document.getElementById('etx-note') ? document.getElementById('etx-note').value : (tx.note || '');
+      const g = id => { const el = document.getElementById(id); return el ? el.value : undefined; };
 
-      // Reverse old balance
+      const newType = g('etx-type') || tx.type;
+      const newDate = g('etx-date') || tx.date;
+      const newNote = g('etx-note') !== undefined ? g('etx-note') : (tx.note || '');
+      const newCat  = g('etx-category') || tx.category;
+
+      // Reverse old balance effect
       if (tx.type === 'transfer') {
-        const fa = state.accounts[tx.fromAccount]; const ta = state.accounts[tx.toAccount];
+        const fa = state.accounts[tx.fromAccount];
+        const ta = state.accounts[tx.toAccount];
         if (fa) fa.balance += parseFloat(tx.fromAmount || tx.amount) || 0;
         if (ta) ta.balance -= parseFloat(tx.toAmount   || tx.amount) || 0;
       } else {
@@ -4114,16 +4140,43 @@ function applyTheme() {
         }
       }
 
-      // Apply new balance
-      const newAcc = state.accounts[newAccount];
-      if (newType !== 'transfer' && newAcc) {
-        if (newType === 'income')  newAcc.balance += newAmount;
-        if (newType === 'expense') newAcc.balance -= newAmount;
+      // Apply new values + new balance effect
+      if (newType === 'transfer') {
+        const fromKey = g('etx-from-account') || tx.fromAccount || tx.account;
+        const toKey   = g('etx-to-account')   || tx.toAccount;
+        const fromAmt = parseFloat(g('etx-from-amount')) || parseFloat(tx.fromAmount || tx.amount) || 0;
+        const toAmt   = parseFloat(g('etx-to-amount'))   || parseFloat(tx.toAmount   || tx.amount) || fromAmt;
+        const fromAcc = state.accounts[fromKey];
+        const toAcc   = state.accounts[toKey];
+        if (fromAcc) fromAcc.balance -= fromAmt;
+        if (toAcc)   toAcc.balance   += toAmt;
+        Object.assign(tx, {
+          type: 'transfer', date: newDate, note: newNote, category: newCat,
+          fromAccount: fromKey, toAccount: toKey,
+          fromAmount: fromAmt, toAmount: toAmt,
+          fromCurrency: fromAcc ? fromAcc.currency : (tx.fromCurrency || 'RUB'),
+          toCurrency:   toAcc   ? toAcc.currency   : (tx.toCurrency   || 'RUB'),
+          // clear old single-account fields
+          account: undefined, amount: undefined, direction: undefined,
+        });
+      } else {
+        const newDir    = g('etx-direction') || tx.direction;
+        const newAccKey = g('etx-account')   || tx.account;
+        const newAmt    = parseFloat(g('etx-amount')) || parseFloat(tx.amount) || 0;
+        const newCur    = g('etx-currency')  || tx.currency || 'RUB';
+        const newAcc    = state.accounts[newAccKey];
+        if (newAcc) {
+          if (newType === 'income')  newAcc.balance += newAmt;
+          if (newType === 'expense') newAcc.balance -= newAmt;
+        }
+        Object.assign(tx, {
+          type: newType, date: newDate, note: newNote, category: newCat,
+          direction: newDir, account: newAccKey, amount: newAmt, currency: newCur,
+          // clear transfer fields
+          fromAccount: undefined, toAccount: undefined,
+          fromAmount: undefined, toAmount: undefined,
+        });
       }
-
-      // Update transaction
-      Object.assign(tx, { type: newType, date: newDate, direction: newDir,
-        account: newAccount, amount: newAmount, category: newCategory, note: newNote });
 
       state.showEditTxModal = null;
       saveToStorage();
