@@ -4281,73 +4281,113 @@ let _voiceActive = false;
 function startVoiceInput() {
   const btn = document.getElementById('ai-voice-btn');
 
-  // If already active — stop
+  // If already active — stop manually
   if (_voiceActive) {
     _voiceRecognition && _voiceRecognition.stop();
     _voiceActive = false;
-    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; btn.style.borderColor = ''; }
+    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = ''; }
     return;
   }
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
-    // Fallback: MediaRecorder approach
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      alert('Голосовой ввод не поддерживается в этом браузере. Используй Chrome или Safari.');
-      return;
-    }
-    alert('Голосовой ввод работает только в Chrome. Открой сайт в Chrome для использования этой функции.');
+    alert('Голосовой ввод работает только в Chrome. Открой сайт в Chrome.');
     return;
+  }
+
+  // Check microphone permission first
+  if (navigator.permissions) {
+    navigator.permissions.query({ name: 'microphone' }).then(result => {
+      if (result.state === 'denied') {
+        alert('Доступ к микрофону запрещён. Разреши в настройках браузера: 🔒 → Микрофон → Разрешить');
+        return;
+      }
+    }).catch(() => {});
   }
 
   _voiceRecognition = new SpeechRecognition();
   _voiceRecognition.lang = 'ru-RU';
-  _voiceRecognition.continuous = true;
+  _voiceRecognition.continuous = false;   // auto-stop after pause
   _voiceRecognition.interimResults = true;
   _voiceRecognition.maxAlternatives = 1;
 
-  if (btn) {
+  function setBtnActive() {
+    if (!btn) return;
     btn.textContent = '⏹';
     btn.style.background = 'rgba(239,68,68,0.25)';
     btn.style.borderColor = 'rgba(239,68,68,0.5)';
     btn.style.color = '#f87171';
-    btn.title = 'Нажми чтобы остановить';
+    btn.title = 'Говори... (нажми чтобы остановить)';
   }
+  function setBtnIdle() {
+    if (!btn) return;
+    btn.textContent = '🎤';
+    btn.style.background = '';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+    btn.title = 'Голосовой ввод';
+  }
+
+  setBtnActive();
   _voiceActive = true;
 
   let finalTranscript = '';
+  let silenceTimer = null;
+
+  _voiceRecognition.onstart = function() {
+    // Show listening indicator
+    const inp = document.getElementById('ai-text-input');
+    if (inp && !inp.value) inp.placeholder = '🎤 Говорите...';
+  };
 
   _voiceRecognition.onresult = function(e) {
+    // Reset silence timer on each result
+    clearTimeout(silenceTimer);
+
     let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       if (e.results[i].isFinal) {
-        finalTranscript += e.results[i][0].transcript;
+        finalTranscript += e.results[i][0].transcript + ' ';
       } else {
         interim += e.results[i][0].transcript;
       }
     }
-    // Show interim in input field
     const inp = document.getElementById('ai-text-input');
     if (inp) inp.value = finalTranscript + interim;
+
+    // Auto-send after 1.5s silence if we have final text
+    if (finalTranscript.trim()) {
+      silenceTimer = setTimeout(() => {
+        _voiceRecognition && _voiceRecognition.stop();
+      }, 1500);
+    }
   };
 
   _voiceRecognition.onend = function() {
+    clearTimeout(silenceTimer);
     _voiceActive = false;
-    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = ''; btn.title = 'Голосовой ввод'; }
-    if (finalTranscript.trim()) {
-      const inp = document.getElementById('ai-text-input');
+    setBtnIdle();
+    const inp = document.getElementById('ai-text-input');
+    if (inp) inp.placeholder = 'Напиши или надиктуй операцию...';
+    const text = finalTranscript.trim();
+    if (text) {
       if (inp) inp.value = '';
-      sendAiMessage(finalTranscript.trim(), null);
+      sendAiMessage(text, null);
     }
   };
 
   _voiceRecognition.onerror = function(e) {
+    clearTimeout(silenceTimer);
     _voiceActive = false;
-    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = ''; }
+    setBtnIdle();
+    const inp = document.getElementById('ai-text-input');
+    if (inp) inp.placeholder = 'Напиши или надиктуй операцию...';
     if (e.error === 'not-allowed') {
-      alert('Доступ к микрофону запрещён. Разреши доступ в настройках браузера.');
+      alert('Доступ к микрофону запрещён.\n\nЧтобы разрешить:\n1. Нажми на 🔒 в адресной строке\n2. Найди «Микрофон»\n3. Выбери «Разрешить»\n4. Обнови страницу');
     } else if (e.error === 'no-speech') {
-      // just reset silently
+      // silent — user just didn't say anything
+    } else if (e.error === 'network') {
+      alert('Ошибка сети при распознавании речи. Проверь подключение к интернету.');
     } else {
       console.warn('Voice error:', e.error);
     }
@@ -4357,8 +4397,11 @@ function startVoiceInput() {
     _voiceRecognition.start();
   } catch(err) {
     _voiceActive = false;
-    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = ''; }
-    console.warn('Voice start error:', err);
+    setBtnIdle();
+    console.warn('Voice start error:', err.message);
+    if (err.message && err.message.includes('already started')) {
+      // recognition already running, ignore
+    }
   }
 }
 
