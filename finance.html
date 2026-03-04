@@ -4353,21 +4353,22 @@ async function startVoiceInput() {
   };
 
   _voiceRecognition.onresult = function(e) {
-    // Reset silence timer on each result
     clearTimeout(silenceTimer);
+    console.log('[Voice] onresult, results count:', e.results.length);
 
     let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) {
-        finalTranscript += e.results[i][0].transcript + ' ';
+      const res = e.results[i];
+      console.log('[Voice] result[' + i + ']:', res[0].transcript, 'isFinal:', res.isFinal, 'confidence:', res[0].confidence);
+      if (res.isFinal) {
+        finalTranscript += res[0].transcript + ' ';
       } else {
-        interim += e.results[i][0].transcript;
+        interim += res[0].transcript;
       }
     }
     const inp = document.getElementById('ai-text-input');
     if (inp) inp.value = finalTranscript + interim;
 
-    // Auto-send after 1.5s silence if we have final text
     if (finalTranscript.trim()) {
       silenceTimer = setTimeout(() => {
         _voiceRecognition && _voiceRecognition.stop();
@@ -4379,12 +4380,17 @@ async function startVoiceInput() {
     clearTimeout(silenceTimer);
     _voiceActive = false;
     setBtnIdle();
+    console.log('[Voice] onend, finalTranscript:', JSON.stringify(finalTranscript));
     const inp = document.getElementById('ai-text-input');
     if (inp) inp.placeholder = 'Напиши или надиктуй операцию...';
     const text = finalTranscript.trim();
     if (text) {
       if (inp) inp.value = '';
       sendAiMessage(text, null);
+    } else {
+      // Show what happened
+      if (inp) inp.value = '';
+      console.warn('[Voice] no transcript captured');
     }
   };
 
