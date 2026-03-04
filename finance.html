@@ -4278,62 +4278,116 @@ function applyTheme() {
 let _voiceRecognition = null;
 let _voiceActive = false;
 
-function startVoiceInput() {
+// ── Voice input via MediaRecorder + Whisper API ──────────────────────────────
+let _mediaRecorder = null;
+let _audioChunks = [];
+
+async function startVoiceInput() {
   const btn = document.getElementById('ai-voice-btn');
   const inp = document.getElementById('ai-text-input');
 
-  function btnOn()  { if (btn) { btn.textContent='🔴'; btn.style.background='rgba(239,68,68,0.2)'; btn.style.color='#f87171'; } }
-  function btnOff() { if (btn) { btn.textContent='🎤'; btn.style.background=''; btn.style.color=''; } }
+  function btnOn() {
+    if (!btn) return;
+    btn.textContent = '⏹';
+    btn.style.background = 'rgba(239,68,68,0.2)';
+    btn.style.borderColor = 'rgba(239,68,68,0.5)';
+    btn.style.color = '#f87171';
+    btn.title = 'Нажми чтобы остановить';
+  }
+  function btnOff() {
+    if (!btn) return;
+    btn.textContent = '🎤';
+    btn.style.background = '';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+    btn.title = 'Голосовой ввод';
+  }
+  function btnLoading() {
+    if (!btn) return;
+    btn.textContent = '⏳';
+    btn.style.background = 'rgba(251,191,36,0.15)';
+    btn.style.color = '#fbbf24';
+  }
 
-  if (_voiceActive) {
-    _voiceRecognition && _voiceRecognition.stop();
+  // If already recording — stop and send
+  if (_voiceActive && _mediaRecorder) {
+    _mediaRecorder.stop();
     return;
   }
 
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { alert('Голосовой ввод не поддерживается в этом браузере'); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert('Запись аудио не поддерживается в этом браузере');
+    return;
+  }
 
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch(e) {
+    alert('Доступ к микрофону запрещён.\n\nРазреши доступ: 🔒 в адресной строке → Микрофон → Разрешить → обнови страницу');
+    return;
+  }
+
+  // Pick best supported format
+  const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
+                 : MediaRecorder.isTypeSupported('audio/webm')             ? 'audio/webm'
+                 : MediaRecorder.isTypeSupported('audio/mp4')              ? 'audio/mp4'
+                 : 'audio/ogg';
+
+  _audioChunks = [];
+  _mediaRecorder = new MediaRecorder(stream, { mimeType });
   _voiceActive = true;
   btnOn();
-  if (inp) inp.placeholder = '🎤 Говорите...';
+  if (inp) inp.placeholder = '🎤 Говорите... (нажмите ⏹ чтобы отправить)';
 
-  const rec = new SR();
-  _voiceRecognition = rec;
-  rec.lang = 'ru-RU';
-  rec.continuous = true;
-  rec.interimResults = true;
-  rec.maxAlternatives = 1;
-
-  let final = '';
-
-  rec.onresult = function(e) {
-    let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) final += e.results[i][0].transcript;
-      else interim += e.results[i][0].transcript;
-    }
-    if (inp) inp.value = final + interim;
+  _mediaRecorder.ondataavailable = e => {
+    if (e.data.size > 0) _audioChunks.push(e.data);
   };
 
-  rec.onend = function() {
+  _mediaRecorder.onstop = async () => {
     _voiceActive = false;
-    btnOff();
-    if (inp) inp.placeholder = 'Напиши или надиктуй операцию...';
-    if (final.trim()) {
-      if (inp) inp.value = '';
-      sendAiMessage(final.trim(), null);
+    stream.getTracks().forEach(t => t.stop());
+
+    if (_audioChunks.length === 0) { btnOff(); return; }
+
+    btnLoading();
+    if (inp) inp.placeholder = '⏳ Распознаю речь...';
+
+    try {
+      const blob = new Blob(_audioChunks, { type: mimeType });
+      const base64 = await new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload  = () => res(reader.result.split(',')[1]);
+        reader.onerror = rej;
+        reader.readAsDataURL(blob);
+      });
+
+      const resp = await fetch('/.netlify/functions/whisper', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audio: base64, mimeType: mimeType.split(';')[0] }),
+      });
+
+      const data = await resp.json();
+
+      if (data.error) throw new Error(data.error);
+      if (!data.text || !data.text.trim()) throw new Error('Речь не распознана — попробуй ещё раз');
+
+      btnOff();
+      if (inp) inp.placeholder = 'Напиши или надиктуй операцию...';
+      sendAiMessage(data.text.trim(), null);
+
+    } catch(err) {
+      btnOff();
+      if (inp) inp.placeholder = 'Напиши или надиктуй операцию...';
+      alert('Ошибка распознавания: ' + err.message);
     }
+
+    _audioChunks = [];
+    _mediaRecorder = null;
   };
 
-  rec.onerror = function(e) {
-    _voiceActive = false;
-    btnOff();
-    if (inp) inp.placeholder = 'Напиши или надиктуй операцию...';
-    if (e.error === 'not-allowed') alert('Разреши доступ к микрофону в настройках браузера');
-    else if (e.error !== 'no-speech') alert('Ошибка: ' + e.error);
-  };
-
-  try { rec.start(); } catch(e) { _voiceActive = false; btnOff(); }
+  _mediaRecorder.start();
 }
 
 function profileModalHtml() {
