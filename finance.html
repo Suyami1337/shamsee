@@ -355,6 +355,8 @@ let state = {
   activeMonth: null,
   activePeriod: null,  // { mode: 'month'|'year'|'range', year?, from?, to? }
   showPeriodModal: false,
+  showProjectSwitcher: false,
+  _allProjects: [],  // loaded once from supabase
   showModal: false,
   showModePicker: false,
   showAiChat: false,
@@ -573,7 +575,8 @@ function bodyHtml() {
     ${state.showAiChat       ? aiChatHtml()                            : ''}
     ${state.showRates        ? ratesModalHtml()                        : ''}
     ${state.showSettingsModal? settingsModalHtml()                     : ''}
-    ${state.showPeriodModal  ? periodModalHtml()                       : ''}
+    ${state.showPeriodModal      ? periodModalHtml()                   : ''}
+    ${state.showProjectSwitcher  ? projectSwitcherHtml()               : ''}
     ${state.showProfileModal ? profileModalHtml()                      : ''}
     ${state.showEditTxModal  ? editTxModalHtml(state.showEditTxModal)  : ''}
     ${state.showTxDetail     ? txDetailModalHtml(state.showTxDetail)   : ''}
@@ -668,14 +671,17 @@ function headerHtml() {
   const monthName = MONTHS[parseInt(month)-1];
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;background:rgba(15,15,25,0.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,0.07);position:fixed;top:0;left:0;right:0;z-index:100">
-      <div style="display:flex;align-items:center;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px">
         <button id="btn-back" style="background:none;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#888;font-size:12px;cursor:pointer;padding:5px 10px;white-space:nowrap">← Месяцы</button>
         <div style="width:1px;height:18px;background:rgba(255,255,255,0.08)"></div>
-        <div style="font-size:15px;font-weight:700;color:#fff">${_projectEmoji} ${_projectName || 'MyFinanceAI'}</div>
+        <button id="btn-open-project-switcher" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;padding:7px 14px;display:flex;align-items:center;gap:8px;white-space:nowrap">
+          <span>${_projectEmoji}</span><span>${_projectName || 'MyFinanceAI'}</span><span style="color:#555;font-size:11px">▾</span>
+        </button>
         <div style="font-size:13px;color:#555;font-weight:500">${monthName} ${year}</div>
       </div>
       <button class="btn-add" id="btn-add" style="position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:15px;padding:11px 28px;border-radius:14px;font-weight:800">+ Операция</button>
-      <div style="display:flex;align-items:center;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <button id="btn-period-open" style="background:${state.activePeriod?'rgba(167,139,250,0.12)':'rgba(255,255,255,0.05)'};border:1px solid ${state.activePeriod?'rgba(167,139,250,0.4)':'rgba(255,255,255,0.1)'};border-radius:10px;color:${state.activePeriod?'#a78bfa':'#bbb'};font-size:13px;font-weight:600;cursor:pointer;padding:10px 16px;white-space:nowrap">📅 ${activePeriodLabel()}</button>
         <button id="btn-profile-dash" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#bbb;font-size:13px;font-weight:600;cursor:pointer;padding:10px 16px;white-space:nowrap">👤 Личный кабинет</button>
         <button id="btn-settings-header" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#bbb;font-size:13px;font-weight:600;cursor:pointer;padding:10px 16px;white-space:nowrap">⚙️ Настройки</button>
       </div>
@@ -710,6 +716,14 @@ function monthTxs() {
     return all.filter(t => t.date >= from && t.date <= to);
   }
   return all;
+}
+
+async function loadAllProjects() {
+  if (!_currentUser) return;
+  try {
+    const { data } = await _SB.from('projects').select('id,name,emoji').eq('user_id', _currentUser.id).order('created_at');
+    if (data) state._allProjects = data;
+  } catch(e) { console.warn('loadAllProjects error', e); }
 }
 
 function activePeriodLabel() {
@@ -2467,6 +2481,44 @@ function modalHtml() {
     </div>`;
 }
 
+function projectSwitcherHtml() {
+  const projects = state._allProjects || [];
+  const rows = projects.map(p => {
+    const isCurrent = p.id === _projectId;
+    const hoverBg = isCurrent ? 'rgba(167,139,250,0.1)' : 'rgba(255,255,255,0.03)';
+    return `<div data-switch-project="${p.id}" data-switch-name="${(p.name||'').replace(/"/g,'&quot;')}" data-switch-emoji="${p.emoji||'💼'}"
+      style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;cursor:${isCurrent?'default':'pointer'};
+             background:${hoverBg};
+             border:1px solid ${isCurrent?'rgba(167,139,250,0.35)':'rgba(255,255,255,0.07)'};
+             transition:background 0.15s">
+      <span style="font-size:22px">${p.emoji||'💼'}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:${isCurrent?'700':'500'};color:${isCurrent?'#a78bfa':'#ccc'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name||'Без названия'}</div>
+        ${isCurrent ? '<div style="font-size:11px;color:#a78bfa;margin-top:2px">текущий проект</div>' : ''}
+      </div>
+      ${isCurrent ? '' : '<span style="color:#555;font-size:16px">→</span>'}
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="modal-bg" id="project-switcher-bg">
+      <div class="modal" style="max-width:380px">
+        <div class="modal-header">
+          <span class="modal-title">🗂 Проекты</span>
+          <button class="modal-close" id="project-switcher-close">×</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;padding:0 20px 20px">
+          ${rows.length ? rows : '<div style="color:#555;font-size:13px;padding:12px 0">Загрузка проектов...</div>'}
+          <div style="margin-top:8px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.07)">
+            <button id="btn-go-all-projects" style="width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#888;cursor:pointer;font-size:13px">
+              ← Все проекты
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
 function periodModalHtml() {
   const p = state.activePeriod || {};
   const mode = p.mode || 'month';
@@ -3257,10 +3309,7 @@ function bindEvents() {
 
   // Header settings button — opens overlay modal
   // Settings buttons (header + month selector)
-  // ── Period modal ──
-  document.querySelectorAll('#btn-period-open').forEach(function(b) {
-    if (b) b.onclick = function() { state.showPeriodModal = true; render(); };
-  });
+  // ── Period modal — use delegation since header renders separately ──
   var periodBg    = document.getElementById('period-modal-bg');
   var periodClose = document.getElementById('period-modal-close');
   if (periodBg)    periodBg.onclick    = function(e) { if(e.target===periodBg){state.showPeriodModal=false;render();} };
@@ -4710,9 +4759,62 @@ function applyTheme() {
   // Fetch live rates AFTER render — never before cloudLoad finishes
   fetchLiveRates().then(() => render());
 
+  // Pre-load all projects for switcher
+  loadAllProjects();
+
   // ── AI Chat: image upload handler (survives re-renders via delegation) ──
   document.addEventListener('change', function(e) {
     if (e.target.id !== 'ai-img-input') return;
+
+  // ── Period button — global delegation (header renders separately) ──
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('#btn-period-open')) {
+      state.showPeriodModal = true; render();
+    }
+  });
+
+  // ── Project switcher — global delegation ──
+  document.addEventListener('click', async function(e) {
+    // Open switcher
+    if (e.target.closest('#btn-open-project-switcher')) {
+      state.showProjectSwitcher = true;
+      render();
+      // Load projects list if not yet loaded
+      if (!state._allProjects.length) {
+        await loadAllProjects();
+        render();
+      }
+      return;
+    }
+    // Close on bg click
+    if (e.target.id === 'project-switcher-bg') {
+      state.showProjectSwitcher = false; render(); return;
+    }
+    // Close button
+    if (e.target.id === 'project-switcher-close') {
+      state.showProjectSwitcher = false; render(); return;
+    }
+    // Go to all projects page
+    if (e.target.id === 'btn-go-all-projects') {
+      window.location.href = '/projects'; return;
+    }
+    // Switch to another project
+    const row = e.target.closest('[data-switch-project]');
+    if (row) {
+      const pid   = row.dataset.switchProject;
+      const pname = row.dataset.switchName;
+      const pEmoji= row.dataset.switchEmoji;
+      if (pid === _projectId) { state.showProjectSwitcher = false; render(); return; }
+      // Save current project first
+      await saveToStorage();
+      // Switch
+      sessionStorage.setItem('active_project_id',    pid);
+      sessionStorage.setItem('active_project_name',  pname);
+      sessionStorage.setItem('active_project_emoji', pEmoji);
+      // Reload page to init fresh state for new project
+      window.location.reload();
+    }
+  });
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
