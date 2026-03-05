@@ -517,6 +517,7 @@ function monthlyData() {
     const mk = getMonthKey(t.date);
     if (!map[mk]) map[mk] = { month: mk, adam_in:0, adam_out:0, shamsee_in:0, shamsee_out:0, personal_in:0, personal_out:0 };
     const v = toRub(t.amount, t.currency);
+    if (t.type !== 'income' && t.type !== 'expense') return; // skip transfers & dividends in chart
     if (t.direction === 'adam')     t.type === 'income' ? (map[mk].adam_in += v)     : (map[mk].adam_out += v);
     if (t.direction === 'shamsee')  t.type === 'income' ? (map[mk].shamsee_in += v)  : (map[mk].shamsee_out += v);
     if (t.direction === 'personal') t.type === 'income' ? (map[mk].personal_in += v) : (map[mk].personal_out += v);
@@ -2663,6 +2664,8 @@ async function sendAiMessage(text, imageBase64, imageMediaType) {
 
 ⚠️ ЗАПРЕЩЕНО использовать type "dds_in" или "dds_out" — их больше не существует!
 
+⚠️ ЗАПРЕЩЕНО создавать тип "dividend" самостоятельно — дивиденды создаются только через кнопку выплаты партнёру.
+
 ⚠️ СТРОГОЕ ПРАВИЛО: СЧЁТ ДОЛЖЕН ПРИНАДЛЕЖАТЬ УКАЗАННОМУ НАПРАВЛЕНИЮ
 Для операций income/expense: поле "account" и поле "direction" ОБЯЗАНЫ совпадать.
 Прежде чем записать операцию — проверь по списку "Счета по направлениям" выше:
@@ -2892,7 +2895,7 @@ NEW_FUND_JSON:
       if (match) {
         try {
           const candidate = JSON.parse(match[0]);
-          if (candidate[0] && candidate[0].type && ['income','expense','transfer'].includes(candidate[0].type)) {
+          if (candidate[0] && candidate[0].type && ['income','expense','transfer','dividend'].includes(candidate[0].type)) {
             parsed = candidate;
             displayText = fullText.replace(match[0], '').replace('TRANSACTIONS_JSON:', '').replace('NEW_CATEGORIES_JSON:', '').trim();
           }
@@ -3706,7 +3709,7 @@ function bindEvents() {
       state.transactions.push(tx);
       const acc = state.accounts[tx.account];
       if (acc) {
-        if (tx.type === 'income') acc.balance += tx.amount;
+        if (tx.type === 'income') acc.balance += tx.amount; // dividend handled separately
         else acc.balance -= tx.amount;
       }
     }
@@ -4720,8 +4723,8 @@ function applyTheme() {
         } else {
           const acc = state.accounts[tx.account];
           if (acc) {
-            if (tx.type === 'income')  acc.balance -= parseFloat(tx.amount) || 0;
-            if (tx.type === 'expense') acc.balance += parseFloat(tx.amount) || 0;
+            if (tx.type === 'income')                        acc.balance -= parseFloat(tx.amount) || 0;
+            if (tx.type === 'expense' || tx.type === 'dividend') acc.balance += parseFloat(tx.amount) || 0;
           }
         }
         state.transactions = state.transactions.filter(t => t.id !== txId);
@@ -4762,8 +4765,8 @@ function applyTheme() {
       } else {
         const acc = state.accounts[tx.account];
         if (acc) {
-          if (tx.type === 'income')  acc.balance -= parseFloat(tx.amount) || 0;
-          if (tx.type === 'expense') acc.balance += parseFloat(tx.amount) || 0;
+          if (tx.type === 'income')                    acc.balance -= parseFloat(tx.amount) || 0;
+          if (tx.type === 'expense' || tx.type === 'dividend') acc.balance += parseFloat(tx.amount) || 0;
         }
       }
 
@@ -4794,8 +4797,8 @@ function applyTheme() {
         const newCur    = g('etx-currency')  || tx.currency || 'RUB';
         const newAcc    = state.accounts[newAccKey];
         if (newAcc) {
-          if (newType === 'income')  newAcc.balance += newAmt;
-          if (newType === 'expense') newAcc.balance -= newAmt;
+          if (newType === 'income')                       newAcc.balance += newAmt;
+          if (newType === 'expense' || newType === 'dividend') newAcc.balance -= newAmt;
         }
         Object.assign(tx, {
           type: newType, date: newDate, note: newNote, category: newCat,
