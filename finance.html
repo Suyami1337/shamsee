@@ -1783,8 +1783,8 @@ function pnlHtml() {
           <span class="card-title" style="font-size:17px">${v.icon} ${v.label}</span>
         </div>
 
-        <!-- Summary: баланс / доход / расход / прибыль / владелец / каждый партнёр -->
-        <div class="odds-summary" style="grid-template-columns:repeat(${Math.min(4 + partners.filter(p=>!p.isOwner&&p.name!=='Я').length + 1, 6)},1fr)">
+        <!-- Summary: баланс / доход / расход / прибыль -->
+        <div class="odds-summary" style="grid-template-columns:repeat(4,1fr)">
           ${(()=>{
             const dirBal = Object.values(state.accounts).filter(a=>a.direction===k).reduce((s,a)=>s+toRub(a.balance,a.currency),0);
             const balC = dirBal >= 0 ? '#6ee7b7' : '#f87171';
@@ -1793,9 +1793,6 @@ function pnlHtml() {
           <div class="odds-sum-cell"><div class="os-label">🟢 Доходы</div><div class="os-value" style="color:#6ee7b7">${fmt(totalIncome)}</div></div>
           <div class="odds-sum-cell"><div class="os-label">🔴 Расходы</div><div class="os-value" style="color:#f87171">${fmt(totalExpense)}</div></div>
           <div class="odds-sum-cell"><div class="os-label">🟣 Чистая прибыль</div><div class="os-value" style="color:${pc}">${fmt(profit)}</div></div>
-          <div class="odds-sum-cell"><div class="os-label">👑 ${myPart?.name||'Владелец'} (${(myShare*100).toFixed(0)}%)</div><div class="os-value" style="color:${myc}">${fmt(my)}</div></div>
-          ${partners.filter(p=>!p.isOwner&&p.name!=='Я').map(p=>`
-          <div class="odds-sum-cell"><div class="os-label">🤝 ${p.name} (${(p.share*100).toFixed(0)}%)</div><div class="os-value" style="color:#fbbf24">${fmt(profit>0?profit*p.share:0)}</div></div>`).join('')}
         </div>
 
         <!-- Categories -->
