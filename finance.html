@@ -855,27 +855,17 @@ function accountsHtml() {
 }
 
 // ── TRANSACTIONS ──
-function editTxModalHtml(txId) {
-  const t = state.transactions.find(x => x.id === txId);
-  if (!t) return '';
-  const allAccOpts = Object.entries(state.accounts).map(([k,a]) =>
-    `<option value="${k}">${a.name} (${a.currency})</option>`).join('');
+function buildEditFields(type, tx) {
   const accOptsFor = (selKey) => Object.entries(state.accounts)
     .map(([k,a]) => `<option value="${k}" ${k===selKey?'selected':''}>${a.name} (${a.currency})</option>`).join('');
-  const typeOpts = [['income','💚 Доход'],['expense','🔴 Расход'],['transfer','🟡 Перевод']]
-    .map(([v,l]) => `<option value="${v}" ${t.type===v?'selected':''}>${l}</option>`).join('');
-  const date = t.date || '';
-  const note = (t.note||'').replace(/"/g,'&quot;');
-
-  let fieldsHtml;
-  if (t.type === 'transfer') {
-    const fromKey = t.fromAccount || t.account || '';
-    const toKey   = t.toAccount   || '';
-    const fromAmt = t.fromAmount  || t.amount || '';
-    const toAmt   = t.toAmount    || t.fromAmount || t.amount || '';
+  if (type === 'transfer') {
+    const fromKey = tx.fromAccount || tx.account || '';
+    const toKey   = tx.toAccount   || '';
+    const fromAmt = tx.fromAmount  || tx.amount || '';
+    const toAmt   = tx.toAmount    || tx.fromAmount || tx.amount || '';
     const catOpts = CATEGORIES_DDS.map(c =>
-      `<option value="${c}" ${t.category===c?'selected':''}>${c}</option>`).join('');
-    fieldsHtml = `
+      `<option value="${c}" ${tx.category===c?'selected':''}>${c}</option>`).join('');
+    return `
       <div><div class="form-label">Откуда (списание)</div>
         <select class="form-inp" id="etx-from-account">${accOptsFor(fromKey)}</select></div>
       <div><div class="form-label">Куда (зачисление)</div>
@@ -890,28 +880,67 @@ function editTxModalHtml(txId) {
         <select class="form-inp" id="etx-category">${catOpts}</select></div>`;
   } else {
     const dirOpts = Object.entries(state.directions || DIRECTIONS).map(([k,v]) =>
-      `<option value="${k}" ${t.direction===k?'selected':''}>${v.icon} ${v.label}</option>`).join('');
-    const accKey = t.account || '';
-    const catOpts = [...getDirCats(t.direction,'in'), ...getDirCats(t.direction,'out')]
+      `<option value="${k}" ${(tx.direction||'')===k?'selected':''}>${v.icon} ${v.label}</option>`).join('');
+    const accKey  = tx.account || '';
+    const dir     = tx.direction || Object.keys(state.directions||DIRECTIONS)[0] || '';
+    const catOpts = [...getDirCats(dir,'in'), ...getDirCats(dir,'out')]
       .filter((c,i,a)=>a.indexOf(c)===i)
-      .map(c => `<option value="${c}" ${t.category===c?'selected':''}>${c}</option>`).join('');
-    fieldsHtml = `
+      .map(cat => `<option value="${cat}" ${tx.category===cat?'selected':''}>${cat}</option>`).join('');
+    return `
       <div><div class="form-label">Направление</div>
         <select class="form-inp" id="etx-direction">${dirOpts}</select></div>
       <div><div class="form-label">Счёт</div>
         <select class="form-inp" id="etx-account">${accOptsFor(accKey)}</select></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div><div class="form-label">Сумма</div>
-          <input type="number" class="form-inp" id="etx-amount" value="${t.amount||''}"></div>
+          <input type="number" class="form-inp" id="etx-amount" value="${tx.amount||''}"></div>
         <div><div class="form-label">Валюта</div>
           <select class="form-inp" id="etx-currency">
             ${(state.enabledCurrencies||['RUB','SAR','USDT']).map(cur =>
-              `<option value="${cur}" ${(t.currency||'RUB')===cur?'selected':''}>${cur}</option>`).join('')}
+              `<option value="${cur}" ${(tx.currency||'RUB')===cur?'selected':''}>${cur}</option>`).join('')}
           </select></div>
       </div>
       <div><div class="form-label">Категория</div>
         <select class="form-inp" id="etx-category">${catOpts}</select></div>`;
   }
+}
+
+function reRenderEditFields(newType) {
+  const txId = state.showEditTxModal;
+  const tx   = state.transactions.find(x => x.id === txId);
+  if (!tx) return;
+  const container = document.getElementById('etx-fields');
+  if (!container) return;
+  // build a fake tx snapshot with current form values to preserve edits
+  const snapshot = {
+    ...tx,
+    type:      newType,
+    account:   (document.getElementById('etx-account')   ||{}).value || tx.account,
+    direction: (document.getElementById('etx-direction') ||{}).value || tx.direction,
+    amount:    (document.getElementById('etx-amount')    ||{}).value || tx.amount,
+    currency:  (document.getElementById('etx-currency')  ||{}).value || tx.currency,
+    fromAccount: (document.getElementById('etx-from-account')||{}).value || tx.fromAccount,
+    toAccount:   (document.getElementById('etx-to-account')  ||{}).value || tx.toAccount,
+    fromAmount:  (document.getElementById('etx-from-amount') ||{}).value || tx.fromAmount,
+    toAmount:    (document.getElementById('etx-to-amount')   ||{}).value || tx.toAmount,
+    category:  (document.getElementById('etx-category')  ||{}).value || tx.category,
+  };
+  container.innerHTML = buildEditFields(newType, snapshot);
+}
+
+function editTxModalHtml(txId) {
+  const t = state.transactions.find(x => x.id === txId);
+  if (!t) return '';
+  const allAccOpts = Object.entries(state.accounts).map(([k,a]) =>
+    `<option value="${k}">${a.name} (${a.currency})</option>`).join('');
+  const accOptsFor = (selKey) => Object.entries(state.accounts)
+    .map(([k,a]) => `<option value="${k}" ${k===selKey?'selected':''}>${a.name} (${a.currency})</option>`).join('');
+  const typeOpts = [['income','💚 Доход'],['expense','🔴 Расход'],['transfer','🟡 Перевод']]
+    .map(([v,l]) => `<option value="${v}" ${t.type===v?'selected':''}>${l}</option>`).join('');
+  const date = t.date || '';
+  const note = (t.note||'').replace(/"/g,'&quot;');
+
+  const fieldsHtml = buildEditFields(t.type, t);
 
   return `
     <div class="modal-bg" id="edit-tx-bg">
@@ -923,11 +952,11 @@ function editTxModalHtml(txId) {
         <div class="form-grid">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             <div><div class="form-label">Тип</div>
-              <select class="form-inp" id="etx-type">${typeOpts}</select></div>
+              <select class="form-inp" id="etx-type" onchange="reRenderEditFields(this.value)">${typeOpts}</select></div>
             <div><div class="form-label">Дата</div>
               <input type="date" class="form-inp" id="etx-date" value="${date}"></div>
           </div>
-          ${fieldsHtml}
+          <div id="etx-fields">${fieldsHtml}</div>
           <div><div class="form-label">Комментарий</div>
             <input type="text" class="form-inp" id="etx-note" value="${note}"></div>
           <button class="btn-submit" id="btn-etx-save">Сохранить</button>
@@ -1138,11 +1167,11 @@ function txItemHtml(t) {
 
   // ── REGULAR ─────────────────────────────────────────────────────────────────
   const acc  = state.accounts[t.account];
-  const sign = (t.type === 'income' || t.type === 'dds_in') ? '+' : '-';
+  const sign = t.type === 'income' ? '+' : t.type === 'transfer' ? '⇄' : '-';
   const amtColor  = t.type==='income'?'#6ee7b7':t.type==='expense'?'#f87171':t.type==='dds_in'?'#93c5fd':'#fbbf24';
-  const typeLabel = t.type==='income'?'Доход':t.type==='expense'?'Расход':t.type==='dds_in'?'ДДС+':'ДДС−';
-  const typeBg    = t.type==='income'?'rgba(110,231,183,0.08)':t.type==='expense'?'rgba(239,68,68,0.08)':t.type==='dds_in'?'rgba(147,197,253,0.08)':'rgba(251,191,36,0.08)';
-  const typeBorder= t.type==='income'?'rgba(110,231,183,0.2)':t.type==='expense'?'rgba(239,68,68,0.2)':t.type==='dds_in'?'rgba(147,197,253,0.2)':'rgba(251,191,36,0.2)';
+  const typeLabel = t.type==='income'?'Доход':t.type==='expense'?'Расход':t.type==='transfer'?'Перевод':'Неизвестно';
+  const typeBg    = t.type==='income'?'rgba(110,231,183,0.08)':t.type==='expense'?'rgba(239,68,68,0.08)':'rgba(251,191,36,0.08)';
+  const typeBorder= t.type==='income'?'rgba(110,231,183,0.2)':t.type==='expense'?'rgba(239,68,68,0.2)':'rgba(251,191,36,0.2)';
   const accName = acc ? acc.name : t.account;
   const sub = t.currency!=='RUB' ? `<div style="font-size:11px;color:#555;margin-top:1px">≈${fmt(toRub(t.amount,t.currency))}</div>` : '';
   return `
@@ -1220,11 +1249,11 @@ function txDetailModalHtml(txId) {
     const dir = (state.directions || DIRECTIONS)[t.direction] || DIRECTIONS[t.direction];
     const accName = acc ? acc.name : (t.account || '—');
     const dirName = dir ? dir.icon + ' ' + dir.label : (t.direction || '—');
-    const isIncome = t.type === 'income' || t.type === 'dds_in';
+    const isIncome = t.type === 'income';
     const sign = isIncome ? '+' : '-';
     const amtColor = t.type==='income' ? '#6ee7b7' : t.type==='expense' ? '#f87171' : '#fbbf24';
     const typeLabel = t.type==='income' ? '💚 Доход' : t.type==='expense' ? '🔴 Расход'
-                    : t.type==='dds_in' ? '🔵 ДДС+' : t.type==='dds_out' ? '🟡 ДДС−' : t.type;
+                    : t.type==='transfer' ? '🔄 Перевод' : t.type;
     const amt = parseFloat(t.amount) || 0;
     const cur = t.currency || 'RUB';
     amountBlock = `
@@ -3345,7 +3374,7 @@ function bindEvents() {
     state.transactions.push({
       id: 'fa_out_' + id,
       date,
-      type: txType === 'in' ? 'dds_out' : 'dds_in',
+      type: 'transfer',
       direction: accDir,
       account: accKey,
       amount: amt,
@@ -3360,7 +3389,7 @@ function bindEvents() {
     state.transactions.push({
       id: 'fa_in_' + id,
       date,
-      type: txType === 'in' ? 'dds_in' : 'dds_out',
+      type: 'transfer',
       direction: 'personal',
       account: accKey,
       amount: amt,
@@ -4179,6 +4208,68 @@ function applyTheme() {
       state.showPartnerManage = null; render(); return;
     }
 
+    // ── Partner pay button → open modal ──
+    const partnerPayBtn = e.target.closest('[data-partner-pay]');
+    if (partnerPayBtn) {
+      state.showPartnerModal = {
+        dirKey:      partnerPayBtn.dataset.partnerPay,
+        partnerId:   partnerPayBtn.dataset.partnerId,
+        partnerName: partnerPayBtn.dataset.partnerName,
+      };
+      render();
+      return;
+    }
+
+    // ── Partner pay modal: close ──
+    if (e.target.id === 'partner-modal-close' || e.target.id === 'partner-modal-bg') {
+      state.showPartnerModal = null; render(); return;
+    }
+
+    // ── Partner pay modal: submit ──
+    if (e.target.id === 'btn-pp-submit') {
+      const { dirKey, partnerId } = state.showPartnerModal || {};
+      if (!dirKey || !partnerId) return;
+
+      const accKey  = (document.getElementById('pp-account') || {}).value;
+      const date    = (document.getElementById('pp-date')    || {}).value || new Date().toISOString().slice(0,10);
+      const amtRaw  = parseFloat((document.getElementById('pp-amount') || {}).value) || 0;
+      const note    = (document.getElementById('pp-note')    || {}).value || '';
+
+      if (!amtRaw || amtRaw <= 0) { alert('Укажи сумму выплаты'); return; }
+      const acc = state.accounts[accKey];
+      if (!acc) { alert('Счёт не найден'); return; }
+
+      // Save payment record
+      if (!state.partnerPayments[dirKey]) state.partnerPayments[dirKey] = {};
+      if (!state.partnerPayments[dirKey][partnerId]) state.partnerPayments[dirKey][partnerId] = [];
+      state.partnerPayments[dirKey][partnerId].push({
+        id: 'pp_' + Date.now(),
+        date, amount: amtRaw, currency: acc.currency, note,
+        account: accKey, createdAtMs: Date.now()
+      });
+
+      // Deduct from account balance
+      acc.balance -= amtRaw;
+
+      // Also create a transaction so it appears in operations
+      const txId = 'tr_pp_' + Date.now();
+      const dir  = state.directions[dirKey] || DIRECTIONS[dirKey] || {};
+      const partnerName = (state.showPartnerModal || {}).partnerName || '';
+      state.transactions.push({
+        id: txId, date, type: 'expense',
+        direction: dirKey, account: accKey,
+        amount: amtRaw, currency: acc.currency,
+        category: 'Дивиденды партнёру',
+        note: note || ('Выплата: ' + partnerName),
+        createdAt: Date.now(), createdAtMs: Date.now(), updatedAtMs: null,
+      });
+
+      saveToStorage();
+      state.showPartnerModal = null;
+      render();
+      return;
+    }
+
     // ── Partner manage modal: Add partner ──
     if (e.target.id === 'btn-pm-add') {
       const dirKey = state.showPartnerManage;
@@ -4319,9 +4410,10 @@ function applyTheme() {
           fromAmount: fromAmt, toAmount: toAmt,
           fromCurrency: fromAcc ? fromAcc.currency : (tx.fromCurrency || 'RUB'),
           toCurrency:   toAcc   ? toAcc.currency   : (tx.toCurrency   || 'RUB'),
-          // clear old single-account fields
-          account: undefined, amount: undefined, direction: undefined,
+          isTransfer: true,
         });
+        // Remove single-account fields cleanly
+        delete tx.account; delete tx.amount; delete tx.direction; delete tx.currency;
       } else {
         const newDir    = g('etx-direction') || tx.direction;
         const newAccKey = g('etx-account')   || tx.account;
@@ -4335,10 +4427,12 @@ function applyTheme() {
         Object.assign(tx, {
           type: newType, date: newDate, note: newNote, category: newCat,
           direction: newDir, account: newAccKey, amount: newAmt, currency: newCur,
-          // clear transfer fields
-          fromAccount: undefined, toAccount: undefined,
-          fromAmount: undefined, toAmount: undefined,
+          isTransfer: false,
         });
+        // Remove transfer fields cleanly
+        delete tx.fromAccount; delete tx.toAccount;
+        delete tx.fromAmount;  delete tx.toAmount;
+        delete tx.fromCurrency; delete tx.toCurrency;
       }
 
       tx.updatedAtMs = Date.now();
