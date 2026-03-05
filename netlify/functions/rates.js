@@ -1,7 +1,6 @@
 // netlify/functions/rates.js
-// Fetches live exchange rates: SAR/RUB, USDT/RUB, USD/RUB
-// Uses ExchangeRate-API free tier (no key required, updates ~daily)
-// Fallback: last known rates if API is unavailable
+// Fetches live exchange rates for all supported currencies vs RUB
+// Uses open.er-api.com free tier (no key required, updates daily)
 
 exports.handler = async function() {
   const headers = {
@@ -9,35 +8,38 @@ exports.handler = async function() {
     'Access-Control-Allow-Origin': '*',
   };
 
+  // All currencies the app supports (except RUB which is base)
+  const SUPPORTED = ['SAR', 'USD', 'EUR', 'GBP', 'AED', 'TRY', 'CNY', 'KZT'];
+  // USDT tracks USD price
+  const USDT_PROXY = 'USD';
+
   try {
-    // Get rates based on RUB — one request gives us all currencies vs RUB
     const res = await fetch('https://open.er-api.com/v6/latest/RUB', {
       headers: { 'User-Agent': 'MyFinanceAI/1.0' }
     });
 
     if (!res.ok) throw new Error(`API status ${res.status}`);
     const data = await res.json();
-
     if (!data.rates) throw new Error('No rates in response');
 
-    // rates are X per 1 RUB, so 1 SAR = 1/rates.SAR RUB
-    const sarPerRub  = data.rates['SAR'];   // e.g. 0.049 SAR per 1 RUB
-    const usdtPerRub = data.rates['USD'];   // using USD as proxy for USDT
-    const usdPerRub  = data.rates['USD'];
-
-    if (!sarPerRub || !usdtPerRub) throw new Error('SAR or USD rate missing');
-
-    const rubPerSar  = parseFloat((1 / sarPerRub).toFixed(4));
-    const rubPerUsdt = parseFloat((1 / usdtPerRub).toFixed(4));
-    const rubPerUsd  = parseFloat((1 / usdPerRub).toFixed(4));
+    // data.rates[X] = how many X per 1 RUB
+    // We need: how many RUB per 1 X = 1 / data.rates[X]
+    const result = {};
+    for (const cur of SUPPORTED) {
+      if (data.rates[cur]) {
+        result[cur] = parseFloat((1 / data.rates[cur]).toFixed(4));
+      }
+    }
+    // USDT = USD rate (closest proxy)
+    if (data.rates[USDT_PROXY]) {
+      result['USDT'] = parseFloat((1 / data.rates[USDT_PROXY]).toFixed(4));
+    }
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
-        SAR:       rubPerSar,
-        USDT:      rubPerUsdt,
-        USD:       rubPerUsd,
+        ...result,
         updatedAt: data.time_last_update_utc || new Date().toUTCString(),
         source:    'open.er-api.com',
       }),
@@ -45,17 +47,15 @@ exports.handler = async function() {
 
   } catch (err) {
     console.error('rates.js error:', err.message);
-    // Return fallback rates with error flag so client can show warning
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
-        SAR:       20.5,
-        USDT:      90.0,
-        USD:       90.0,
+        SAR: 20.5, USD: 90.0, USDT: 90.0, EUR: 98.0,
+        GBP: 115.0, AED: 24.5, TRY: 2.8, CNY: 12.5, KZT: 0.19,
         updatedAt: null,
-        source:    'fallback',
-        error:     err.message,
+        source: 'fallback',
+        error:  err.message,
       }),
     };
   }
