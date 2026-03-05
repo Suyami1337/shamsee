@@ -1094,8 +1094,11 @@ function transactionsHtml() {
   // Direction tabs
   const dirTabs = [
     `<button class="filter-btn ${!state.activeDir?'active':''}" data-filter="">Все счета</button>`,
-    ...Object.entries(DIRECTIONS).map(([k,v]) =>
-      `<button class="filter-btn ${state.activeDir===k?'active':''}" data-filter="${k}">${v.icon} ${v.label}</button>`),
+    ...Object.entries(DIRECTIONS).map(([k,v]) => {
+      const dirBal = Object.values(state.accounts).filter(a=>a.direction===k).reduce((s,a)=>s+toRub(a.balance,a.currency),0);
+      const balStr = `<span style="font-size:10px;opacity:0.7;margin-left:4px">${fmt(dirBal)}</span>`;
+      return `<button class="filter-btn ${state.activeDir===k?'active':''}" data-filter="${k}">${v.icon} ${v.label}${balStr}</button>`;
+    }),
     `<button class="filter-btn ${state.activeDir==='funds'?'active':''}" data-filter="funds">💰 Фонды</button>`
   ].join('');
 
@@ -1569,16 +1572,19 @@ function partnerManageModalHtml(dirKey) {
         </div>
         <div style="padding:16px 20px">
 
-          <!-- Owner row — pinned, no delete, no % input -->
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:12px;background:rgba(255,215,0,0.06);border:1px solid rgba(255,215,0,0.2);margin-bottom:16px">
-            <div style="display:flex;align-items:center;gap:10px">
-              <span style="font-size:20px">👑</span>
-              <div>
-                <div style="font-size:14px;font-weight:700;color:#ffd700">${owner ? owner.name : 'Я'} · Владелец</div>
-                <div style="font-size:12px;color:#888">Закреплён · нельзя удалить</div>
+          <!-- Owner row — pinned, name editable, no delete, no % input -->
+          <div style="padding:12px 14px;border-radius:12px;background:rgba(255,215,0,0.06);border:1px solid rgba(255,215,0,0.2);margin-bottom:16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:18px">👑</span>
+                <div style="font-size:12px;color:#888">Владелец · Закреплён · нельзя удалить</div>
               </div>
+              <div style="font-size:20px;font-weight:800;color:#ffd700" id="owner-share-preview">${ownerPct}%</div>
             </div>
-            <div style="font-size:20px;font-weight:800;color:#ffd700" id="owner-share-preview">${ownerPct}%</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <input type="text" id="pm-owner-name" value="${owner ? owner.name : ''}" placeholder="Ваше имя" class="form-inp" style="font-size:13px;padding:8px 10px;border-color:rgba(255,215,0,0.3)">
+              <input type="text" id="pm-owner-role" value="${owner ? owner.role : 'Владелец'}" placeholder="Роль" class="form-inp" style="font-size:13px;padding:8px 10px;border-color:rgba(255,215,0,0.3)">
+            </div>
           </div>
 
           <!-- Partners -->
@@ -1586,8 +1592,9 @@ function partnerManageModalHtml(dirKey) {
           ${overLimit ? `<div style="padding:8px 12px;border-radius:8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#f87171;font-size:12px;margin-bottom:10px">⚠️ Сумма долей партнёров превышает 100%</div>` : ''}
           ${partnerRows}
 
-          <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+          <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px">
             <button id="btn-pm-add" style="width:100%;padding:9px;border-radius:9px;border:1px solid rgba(167,139,250,0.3);background:rgba(167,139,250,0.07);color:#a78bfa;cursor:pointer;font-size:13px">+ Добавить партнёра</button>
+            <button id="btn-pm-reset" style="width:100%;padding:9px;border-radius:9px;border:1px solid rgba(239,68,68,0.25);background:rgba(239,68,68,0.05);color:#f87171;cursor:pointer;font-size:12px">🗑 Сбросить всех партнёров (оставить только владельца)</button>
           </div>
           <button id="btn-pm-save" class="btn-submit" style="margin-top:12px">Сохранить</button>
         </div>
@@ -1675,10 +1682,11 @@ function pnlHtml() {
     const totalExpense = Object.values(expenseMap).reduce((s,v2)=>s+v2,0);
     const profit = totalIncome - totalExpense;
     const partners = DIRECTIONS[k]?.partners || [];
-    const myPart  = partners.find(p => p.name === 'Я');
+    const myPart  = partners.find(p => p.isOwner) || partners.find(p => p.name === 'Я');
     const myShare = myPart ? myPart.share : (partners.length === 0 ? 1 : 0);
     const pp      = partners.reduce((s,p) => s + (p.share||0), 0);
-    const pd      = profit > 0 ? profit * (pp - myShare) : 0;
+    const partnerOnlyShare = partners.filter(p => !p.isOwner && p.name !== 'Я').reduce((s,p) => s+(p.share||0), 0);
+    const pd      = profit > 0 ? profit * partnerOnlyShare : 0;
     const my      = profit > 0 ? profit * myShare : profit;
     const pc = profit >= 0 ? '#a78bfa' : '#f87171';
     const myc = my >= 0 ? '#6ee7b7' : '#f87171';
@@ -1740,9 +1748,14 @@ function pnlHtml() {
 
     return `
       <div class="card" style="margin-bottom:20px">
-        <div class="card-header">
+        <div class="card-header" style="flex-wrap:wrap;gap:8px">
           <span class="card-title" style="font-size:17px">${v.icon} ${v.label}</span>
-          ${partners.filter(p=>p.name!=='Я').map(p=>`<span style="font-size:12px;color:#fbbf24">${p.name}: ${fmt(profit>0?profit*p.share:0)} (${(p.share*100).toFixed(0)}%)</span>`).join(' · ')}
+          ${(()=>{
+            const dirBal = Object.values(state.accounts).filter(a=>a.direction===k).reduce((s,a)=>s+toRub(a.balance,a.currency),0);
+            const balColor = dirBal >= 0 ? '#6ee7b7' : '#f87171';
+            return `<span style="font-size:13px;font-weight:700;color:${balColor};background:rgba(255,255,255,0.05);padding:4px 12px;border-radius:20px;font-family:monospace">💰 ${fmt(dirBal)}</span>`;
+          })()}
+          ${partners.filter(p=>!p.isOwner && p.name!=='Я').map(p=>`<span style="font-size:12px;color:#fbbf24">🤝 ${p.name}: ${fmt(profit>0?profit*p.share:0)} (${(p.share*100).toFixed(0)}%)</span>`).join(' · ')}
         </div>
 
         <!-- Summary -->
@@ -1750,9 +1763,9 @@ function pnlHtml() {
           <div class="odds-sum-cell"><div class="os-label">💚 Доходы</div><div class="os-value" style="color:#6ee7b7">${fmt(totalIncome)}</div></div>
           <div class="odds-sum-cell"><div class="os-label">🔴 Расходы</div><div class="os-value" style="color:#f87171">${fmt(totalExpense)}</div></div>
           <div class="odds-sum-cell"><div class="os-label">💜 Прибыль</div><div class="os-value" style="color:${pc}">${fmt(profit)}</div></div>
-          ${pp>0?`
-          <div class="odds-sum-cell"><div class="os-label">🤝 Партнёру (${pp*100}%)</div><div class="os-value" style="color:#fbbf24">${fmt(pd)}</div></div>
-          <div class="odds-sum-cell"><div class="os-label">⭐ Моя прибыль</div><div class="os-value" style="color:${myc}">${fmt(my)}</div></div>`:''}
+          ${partnerOnlyShare>0?`
+          <div class="odds-sum-cell"><div class="os-label">🤝 Партнёрам (${(partnerOnlyShare*100).toFixed(0)}%)</div><div class="os-value" style="color:#fbbf24">${fmt(pd)}</div></div>
+          <div class="odds-sum-cell"><div class="os-label">👑 ${myPart?.name||'Владелец'} (${(myShare*100).toFixed(0)}%)</div><div class="os-value" style="color:${myc}">${fmt(my)}</div></div>`:''}
         </div>
 
         <!-- Categories -->
@@ -4537,6 +4550,8 @@ function applyTheme() {
 
       // DIVIDEND transaction — affects balance but NOT P&L
       acc.balance -= amtRaw;
+      const incomeTxId = (isOwner && createIncome && toAcc) ? 'tr_div_in_' + Date.now() : null;
+
       state.transactions.push({
         id: txId, date, type: 'dividend',
         direction: dirKey, account: accKey,
@@ -4545,11 +4560,11 @@ function applyTheme() {
         note: note || (isOwner ? 'Дивиденды собственника' : 'Выплата: ' + partnerName),
         createdAt: Date.now(), createdAtMs: Date.now(), updatedAtMs: null,
         partnerPayId: ppId, partnerId, partnerDirKey: dirKey,
+        linkedIncomeTxId: incomeTxId || null,
       });
 
-      // INCOME in owner's personal direction — only for owner payout
-      if (isOwner && createIncome && toAcc) {
-        const incomeTxId = 'tr_div_in_' + Date.now();
+      // INCOME in owner's personal direction — only for owner payout with checkbox
+      if (isOwner && createIncome && toAcc && incomeTxId) {
         toAcc.balance += amtRaw;
         state.transactions.push({
           id: incomeTxId, date, type: 'income',
@@ -4558,7 +4573,7 @@ function applyTheme() {
           category: 'Дивиденды',
           note: note || ('Дивиденды из ' + (DIRECTIONS[dirKey]?.label || dirKey)),
           createdAt: Date.now() + 1, createdAtMs: Date.now() + 1, updatedAtMs: null,
-          linkedExpenseTxId: txId,
+          linkedDividendTxId: txId,
         });
       }
 
@@ -4616,6 +4631,22 @@ function applyTheme() {
       return;
     }
 
+    // ── Partner manage modal: Reset all partners ──
+    if (e.target.id === 'btn-pm-reset') {
+      const dirKey = state.showPartnerManage;
+      if (!dirKey) return;
+      if (!confirm('Удалить всех партнёров кроме владельца? Это действие нельзя отменить.')) return;
+      const dir = state.directions[dirKey] || DIRECTIONS[dirKey];
+      if (dir) {
+        const owner = dir.partners?.find(p => p.isOwner);
+        dir.partners = owner ? [{ ...owner, share: 1 }] : [];
+        DIRECTIONS[dirKey] = dir;
+        state.directions[dirKey] = dir;
+        render();
+      }
+      return;
+    }
+
     // ── Partner manage modal: Add partner ──
     if (e.target.id === 'btn-pm-add') {
       const dirKey = state.showPartnerManage;
@@ -4661,10 +4692,19 @@ function applyTheme() {
       const dir = state.directions[dirKey] || DIRECTIONS[dirKey];
       if (!dir || !dir.partners) return;
 
+      // Save owner name/role from inputs
+      const ownerNameEl = document.getElementById('pm-owner-name');
+      const ownerRoleEl = document.getElementById('pm-owner-role');
+      const ownerIdx2 = dir.partners.findIndex(p => p.isOwner);
+      if (ownerIdx2 >= 0) {
+        if (ownerNameEl) dir.partners[ownerIdx2].name = ownerNameEl.value.trim() || dir.partners[ownerIdx2].name;
+        if (ownerRoleEl) dir.partners[ownerIdx2].role = ownerRoleEl.value.trim() || 'Владелец';
+      }
+
       // Only update non-owner partners from form inputs
       let pIdx = 0;
       dir.partners = dir.partners.map(p => {
-        if (p.isOwner) return p; // owner untouched here
+        if (p.isOwner) return p; // owner name already saved above
         const nameEl  = document.querySelector(`[data-pm-name="${pIdx}"]`);
         const roleEl  = document.querySelector(`[data-pm-role="${pIdx}"]`);
         const shareEl = document.querySelector(`[data-pm-share="${pIdx}"]`);
@@ -4728,6 +4768,16 @@ function applyTheme() {
           }
         }
         state.transactions = state.transactions.filter(t => t.id !== txId);
+
+        // If dividend — also delete linked income tx in personal direction
+        if (tx.type === 'dividend' && tx.linkedIncomeTxId) {
+          const inTx = state.transactions.find(t => t.id === tx.linkedIncomeTxId);
+          if (inTx) {
+            const inAcc = state.accounts[inTx.account];
+            if (inAcc) inAcc.balance -= parseFloat(inTx.amount) || 0;
+          }
+          state.transactions = state.transactions.filter(t => t.id !== tx.linkedIncomeTxId);
+        }
 
         // If this was a partner payment tx — remove the linked partnerPayment record too
         if (tx.partnerDirKey && tx.partnerId && tx.partnerPayId) {
@@ -4812,6 +4862,25 @@ function applyTheme() {
       }
 
       tx.updatedAtMs = Date.now();
+
+      // If dividend — sync amount/date/note to linked income tx
+      if (tx.type === 'dividend' && tx.linkedIncomeTxId) {
+        const inTx = state.transactions.find(t => t.id === tx.linkedIncomeTxId);
+        if (inTx) {
+          const oldInAmt = parseFloat(inTx.amount) || 0;
+          const inAcc = state.accounts[inTx.account];
+          // Reverse old income balance effect
+          if (inAcc) inAcc.balance -= oldInAmt;
+          // Apply new amount
+          inTx.amount   = tx.amount;
+          inTx.currency = tx.currency;
+          inTx.date     = tx.date;
+          inTx.note     = tx.note || inTx.note;
+          inTx.updatedAtMs = Date.now();
+          // Apply new income balance effect
+          if (inAcc) inAcc.balance += parseFloat(inTx.amount) || 0;
+        }
+      }
 
       // If this tx is linked to a partnerPayment — sync changes back
       if (tx.partnerDirKey && tx.partnerId && tx.partnerPayId) {
