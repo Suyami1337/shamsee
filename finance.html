@@ -740,11 +740,30 @@ function dirCardHtml(k) {
   const dir = DIRECTIONS[k];
   const s = dirStats(k);
   const partners = DIRECTIONS[k]?.partners || [];
-  const pp = partners.reduce((s,p) => s + (p.share||0), 0);
-  const myShare = partners.find(p => p.name === 'Я')?.share ?? (partners.length ? 0 : 1);
-  const pd = s.profit > 0 ? s.profit * (pp - myShare) : 0;
-  const my = s.profit > 0 ? s.profit * myShare : s.profit;
+
+  // Owner = isOwner flag (or legacy "Я")
+  const owner    = partners.find(p => p.isOwner) || partners.find(p => p.name === 'Я');
+  const nonOwners = partners.filter(p => !p.isOwner && p.name !== 'Я');
+  const ownerShare = owner ? owner.share : (partners.length === 0 ? 1 : 0);
+  const netProfit  = s.profit > 0 ? s.profit * ownerShare : s.profit;
+
+  // Total balance across all accounts in this direction
+  const dirBalance = Object.values(state.accounts)
+    .filter(a => a.direction === k)
+    .reduce((sum, a) => sum + toRub(a.balance, a.currency), 0);
+  const balColor = dirBalance >= 0 ? '#6ee7b7' : '#f87171';
+
   const active = state.activeDir === k ? `active-${k}` : '';
+
+  // Partner rows — only non-owner partners
+  const partnerMetrics = nonOwners.map(p => {
+    const earned = s.profit > 0 ? s.profit * p.share : 0;
+    return `<div class="metric metric-partner">
+      <div class="m-label">🤝 ${p.name} (${(p.share*100).toFixed(0)}%)</div>
+      <div class="m-value">${fmt(earned)}</div>
+    </div>`;
+  }).join('');
+
   return `
     <div class="dir-card ${active}" data-dir="${k}" style="border-color:${dir.color}33">
       <div class="dir-header" style="display:flex;align-items:center;justify-content:space-between">
@@ -752,16 +771,22 @@ function dirCardHtml(k) {
           <span class="dir-icon">${dir.icon}</span>
           <div>
             <div class="dir-name" style="color:${dir.color}">${dir.label}</div>
-            ${partners.filter(p=>p.name!=='Я').map(p=>`<div class="dir-sub">${p.name}: ${(p.share*100).toFixed(0)}%</div>`).join('')}
           </div>
         </div>
         <button data-dir-edit="${k}" onclick="event.stopPropagation()" style="padding:4px 8px;border-radius:7px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.06);color:#888;cursor:pointer;font-size:13px;flex-shrink:0">⚙️</button>
       </div>
       <div class="dir-metrics">
-        <div class="metric metric-income"><div class="m-label">Доходы</div><div class="m-value">${fmt(s.income)}</div></div>
-        <div class="metric metric-expense"><div class="m-label">Расходы</div><div class="m-value">${fmt(s.expense)}</div></div>
-        ${partners.filter(p=>p.name!=='Я').map(p=>`<div class="metric metric-partner"><div class="m-label">${p.name} (${(p.share*100).toFixed(0)}%)</div><div class="m-value">${fmt(s.profit>0?s.profit*p.share:0)}</div></div>`).join('')}
-        <div class="metric metric-profit ${my<0?'metric-profit-neg':''}"><div class="m-label">Моя прибыль</div><div class="m-value">${fmt(my)}</div></div>
+        <div class="metric" style="background:rgba(255,255,255,0.04)">
+          <div class="m-label">💰 Баланс</div>
+          <div class="m-value" style="color:${balColor}">${fmt(dirBalance)}</div>
+        </div>
+        <div class="metric metric-income"><div class="m-label">🟢 Доходы</div><div class="m-value">${fmt(s.income)}</div></div>
+        <div class="metric metric-expense"><div class="m-label">🔴 Расходы</div><div class="m-value">${fmt(s.expense)}</div></div>
+        <div class="metric metric-profit ${netProfit<0?'metric-profit-neg':''}">
+          <div class="m-label">🟣 Чистая прибыль</div>
+          <div class="m-value">${fmt(netProfit)}</div>
+        </div>
+        ${partnerMetrics}
       </div>
     </div>`;
 }
@@ -988,7 +1013,7 @@ function editTxModalHtml(txId) {
     `<option value="${k}">${a.name} (${a.currency})</option>`).join('');
   const accOptsFor = (selKey) => Object.entries(state.accounts)
     .map(([k,a]) => `<option value="${k}" ${k===selKey?'selected':''}>${a.name} (${a.currency})</option>`).join('');
-  const typeOpts = [['income','💚 Доход'],['expense','🔴 Расход'],['transfer','🟡 Перевод'],['dividend','÷ Дивиденды']]
+  const typeOpts = [['income','🟢 Доход'],['expense','🔴 Расход'],['transfer','🟡 Перевод'],['dividend','🟣 Дивиденды']]
     .map(([v,l]) => `<option value="${v}" ${t.type===v?'selected':''}>${l}</option>`).join('');
   const date = t.date || '';
   const note = (t.note||'').replace(/"/g,'&quot;');
@@ -1099,14 +1124,14 @@ function transactionsHtml() {
       const balStr = `<span style="font-size:10px;opacity:0.7;margin-left:4px">${fmt(dirBal)}</span>`;
       return `<button class="filter-btn ${state.activeDir===k?'active':''}" data-filter="${k}">${v.icon} ${v.label}${balStr}</button>`;
     }),
-    `<button class="filter-btn ${state.activeDir==='funds'?'active':''}" data-filter="funds">💰 Фонды</button>`
+    `<button class="filter-btn ${state.activeDir==='funds'?'active':''}" data-filter="funds">💰 Фонды <span style="font-size:10px;opacity:0.7;margin-left:4px">${fmt(Object.values(state.funds).reduce((s,f)=>s+toRub(f.balance,f.currency||'RUB'),0))}</span></button>`
   ].join('');
 
   const typeFilters = [
-    ['income','💚 Доход','#6ee7b7','rgba(110,231,183,0.12)','rgba(110,231,183,0.3)'],
+    ['income','🟢 Доход','#6ee7b7','rgba(110,231,183,0.12)','rgba(110,231,183,0.3)'],
     ['expense','🔴 Расход','#f87171','rgba(239,68,68,0.12)','rgba(239,68,68,0.3)'],
     ['transfer','🟡 Перевод','#fbbf24','rgba(251,191,36,0.12)','rgba(251,191,36,0.3)'],
-    ['dividend','÷ Дивиденды','#a78bfa','rgba(167,139,250,0.12)','rgba(167,139,250,0.3)'],
+    ['dividend','🟣 Дивиденды','#a78bfa','rgba(167,139,250,0.12)','rgba(167,139,250,0.3)'],
   ];
   const typeFilterBar = `<div style="display:flex;gap:8px;padding:8px 16px;flex-wrap:wrap">` +
     typeFilters.map(([type,label,color,bg,border]) => {
@@ -1129,6 +1154,7 @@ function transactionsHtml() {
   // FUNDS section
   if (state.activeDir === 'funds') {
     const activeFund = state.activeAccount || Object.keys(state.funds)[0];
+    const totalFundsBalance = Object.values(state.funds).reduce((s,f) => s + toRub(f.balance, f.currency||'RUB'), 0);
     const fundTabs = Object.entries(state.funds).map(([k,f]) => `
       <button class="acc-tab ${activeFund===k?'acc-tab-active':''}" data-acc="${k}">
         <div style="font-size:13px;font-weight:600">${f.icon} ${f.name}</div>
@@ -1143,7 +1169,12 @@ function transactionsHtml() {
     return `<div class="filter-bar" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div style="display:flex;gap:6px;flex-wrap:wrap">${dirTabs}</div>
       <button id="btn-export-excel" style="padding:7px 14px;border-radius:9px;border:1px solid rgba(110,231,183,0.3);background:rgba(110,231,183,0.07);color:#6ee7b7;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap">📊 Выгрузить Excel</button>
-    </div><div class="acc-tabs-row">${fundTabs}</div>${typeFilterBar}${txHtml}`;
+    </div>
+    <div style="padding:8px 16px 4px;display:flex;align-items:center;gap:8px">
+      <span style="font-size:12px;color:#555">Общий баланс фондов:</span>
+      <span style="font-size:15px;font-weight:700;font-family:monospace;color:#6ee7b7">${fmt(totalFundsBalance)}</span>
+    </div>
+    <div class="acc-tabs-row">${fundTabs}</div>${typeFilterBar}${txHtml}`;
   }
 
   // Show accounts for selected direction as sub-tabs
@@ -1219,9 +1250,9 @@ function txItemHtml(t) {
   // ── REGULAR ─────────────────────────────────────────────────────────────────
   const acc  = state.accounts[t.account];
   const isDividend = t.type === 'dividend';
-  const sign = t.type === 'income' ? '+' : t.type === 'transfer' ? '⇄' : isDividend ? '÷' : '-';
+  const sign = t.type === 'income' ? '+' : t.type === 'transfer' ? '⇄' : '-';
   const amtColor  = t.type==='income'?'#6ee7b7':t.type==='expense'?'#f87171':isDividend?'#a78bfa':'#fbbf24';
-  const typeLabel = t.type==='income'?'Доход':t.type==='expense'?'Расход':t.type==='transfer'?'Перевод':isDividend?'Дивиденды':'Неизвестно';
+  const typeLabel = t.type==='income'?'🟢 Доход':t.type==='expense'?'🔴 Расход':t.type==='transfer'?'🟡 Перевод':isDividend?'🟣 Дивиденды':'Неизвестно';
   const typeBg    = t.type==='income'?'rgba(110,231,183,0.08)':t.type==='expense'?'rgba(239,68,68,0.08)':isDividend?'rgba(167,139,250,0.08)':'rgba(251,191,36,0.08)';
   const typeBorder= t.type==='income'?'rgba(110,231,183,0.2)':t.type==='expense'?'rgba(239,68,68,0.2)':isDividend?'rgba(167,139,250,0.2)':'rgba(251,191,36,0.2)';
   const accName = acc ? acc.name : t.account;
@@ -1305,7 +1336,7 @@ function txDetailModalHtml(txId) {
     const sign = isIncome ? '+' : '-';
     const amtColor = t.type==='income' ? '#6ee7b7' : t.type==='expense' ? '#f87171' : '#fbbf24';
     const typeLabel = t.type==='income' ? '💚 Доход' : t.type==='expense' ? '🔴 Расход'
-                    : t.type==='transfer' ? '🔄 Перевод' : t.type==='dividend' ? '÷ Дивиденды' : t.type;
+                    : t.type==='transfer' ? '🔄 Перевод' : t.type==='dividend' ? '🟣 Дивиденды' : t.type;
     const amt = parseFloat(t.amount) || 0;
     const cur = t.currency || 'RUB';
     amountBlock = `
@@ -1760,9 +1791,9 @@ function pnlHtml() {
 
         <!-- Summary -->
         <div class="odds-summary" style="grid-template-columns:repeat(${cols},1fr)">
-          <div class="odds-sum-cell"><div class="os-label">💚 Доходы</div><div class="os-value" style="color:#6ee7b7">${fmt(totalIncome)}</div></div>
+          <div class="odds-sum-cell"><div class="os-label">🟢 Доходы</div><div class="os-value" style="color:#6ee7b7">${fmt(totalIncome)}</div></div>
           <div class="odds-sum-cell"><div class="os-label">🔴 Расходы</div><div class="os-value" style="color:#f87171">${fmt(totalExpense)}</div></div>
-          <div class="odds-sum-cell"><div class="os-label">💜 Прибыль</div><div class="os-value" style="color:${pc}">${fmt(profit)}</div></div>
+          <div class="odds-sum-cell"><div class="os-label">🟣 Прибыль</div><div class="os-value" style="color:${pc}">${fmt(profit)}</div></div>
           ${partnerOnlyShare>0?`
           <div class="odds-sum-cell"><div class="os-label">🤝 Партнёрам (${(partnerOnlyShare*100).toFixed(0)}%)</div><div class="os-value" style="color:#fbbf24">${fmt(pd)}</div></div>
           <div class="odds-sum-cell"><div class="os-label">👑 ${myPart?.name||'Владелец'} (${(myShare*100).toFixed(0)}%)</div><div class="os-value" style="color:${myc}">${fmt(my)}</div></div>`:''}
@@ -4550,7 +4581,7 @@ function applyTheme() {
 
       // DIVIDEND transaction — affects balance but NOT P&L
       acc.balance -= amtRaw;
-      const incomeTxId = (isOwner && createIncome && toAcc) ? 'tr_div_in_' + Date.now() : null;
+      const incomeTxId = (isOwner && createIncome && toAcc) ? 'tr_div_in_' + (Date.now() + 1) : null;
 
       state.transactions.push({
         id: txId, date, type: 'dividend',
@@ -4596,11 +4627,24 @@ function applyTheme() {
       const payments = (state.partnerPayments[dirKey]||{})[partnerId] || [];
       const pay = payments.find(p => p.id === payId);
       if (pay) {
-        // Remove linked transaction and reverse balance
+        // Remove linked dividend transaction and reverse its balance
         const tx = state.transactions.find(t => t.id === pay.txId);
         if (tx) {
           const acc = state.accounts[tx.account];
           if (acc) acc.balance += parseFloat(tx.amount) || 0;
+
+          // Also delete linked income tx (owner dividend with checkbox)
+          const linkedIncomeId = tx.linkedIncomeTxId
+            || (state.transactions.find(t => t.linkedDividendTxId === tx.id) || {}).id;
+          if (linkedIncomeId) {
+            const inTx = state.transactions.find(t => t.id === linkedIncomeId);
+            if (inTx) {
+              const inAcc = state.accounts[inTx.account];
+              if (inAcc) inAcc.balance -= parseFloat(inTx.amount) || 0;
+            }
+            state.transactions = state.transactions.filter(t => t.id !== linkedIncomeId);
+          }
+
           state.transactions = state.transactions.filter(t => t.id !== pay.txId);
         } else {
           // Fallback: reverse balance by payment amount
@@ -4770,13 +4814,19 @@ function applyTheme() {
         state.transactions = state.transactions.filter(t => t.id !== txId);
 
         // If dividend — also delete linked income tx in personal direction
-        if (tx.type === 'dividend' && tx.linkedIncomeTxId) {
-          const inTx = state.transactions.find(t => t.id === tx.linkedIncomeTxId);
-          if (inTx) {
-            const inAcc = state.accounts[inTx.account];
-            if (inAcc) inAcc.balance -= parseFloat(inTx.amount) || 0;
+        if (tx.type === 'dividend') {
+          // Forward link: dividend stores linkedIncomeTxId
+          const linkedId = tx.linkedIncomeTxId
+            // Reverse link: income stores linkedDividendTxId (fallback for old records)
+            || (state.transactions.find(t => t.linkedDividendTxId === txId) || {}).id;
+          if (linkedId) {
+            const inTx = state.transactions.find(t => t.id === linkedId);
+            if (inTx) {
+              const inAcc = state.accounts[inTx.account];
+              if (inAcc) inAcc.balance -= parseFloat(inTx.amount) || 0;
+            }
+            state.transactions = state.transactions.filter(t => t.id !== linkedId);
           }
-          state.transactions = state.transactions.filter(t => t.id !== tx.linkedIncomeTxId);
         }
 
         // If this was a partner payment tx — remove the linked partnerPayment record too
