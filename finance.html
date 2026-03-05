@@ -353,6 +353,8 @@ let state = {
   tab: 'overview',
   activeDir: null,
   activeMonth: null,
+  activePeriod: null,  // { mode: 'month'|'year'|'range', year?, from?, to? }
+  showPeriodModal: false,
   showModal: false,
   showModePicker: false,
   showAiChat: false,
@@ -442,7 +444,7 @@ function syncCatState() {
 }
 
 function getFullState() {
-  return { transactions: state.transactions, accounts: state.accounts, funds: state.funds, fundHistory: state.fundHistory, directions: state.directions, dirCategories: state.dirCategories, partnerPayments: state.partnerPayments, rates: state.rates, enabledCurrencies: state.enabledCurrencies, theme: state.theme, lang: state.lang, dirOrder: state.dirOrder, accOrder: state.accOrder };
+  return { transactions: state.transactions, accounts: state.accounts, funds: state.funds, fundHistory: state.fundHistory, directions: state.directions, dirCategories: state.dirCategories, partnerPayments: state.partnerPayments, rates: state.rates, enabledCurrencies: state.enabledCurrencies, theme: state.theme, lang: state.lang, dirOrder: state.dirOrder, accOrder: state.accOrder, activePeriod: state.activePeriod };
 }
 
 function saveToStorage() {
@@ -571,6 +573,7 @@ function bodyHtml() {
     ${state.showAiChat       ? aiChatHtml()                            : ''}
     ${state.showRates        ? ratesModalHtml()                        : ''}
     ${state.showSettingsModal? settingsModalHtml()                     : ''}
+    ${state.showPeriodModal  ? periodModalHtml()                       : ''}
     ${state.showProfileModal ? profileModalHtml()                      : ''}
     ${state.showEditTxModal  ? editTxModalHtml(state.showEditTxModal)  : ''}
     ${state.showTxDetail     ? txDetailModalHtml(state.showTxDetail)   : ''}
@@ -644,6 +647,7 @@ function monthSelectorHtml() {
         </div>
         <div style="font-size:22px;font-weight:900;color:#fff;letter-spacing:-0.03em;position:absolute;left:50%;transform:translateX(-50%)">Выбор месяца</div>
         <div style="display:flex;align-items:center;gap:10px">
+          <button id="btn-period-open" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#bbb;font-size:13px;font-weight:600;cursor:pointer;padding:10px 16px;display:flex;align-items:center;gap:7px;white-space:nowrap">📅 Выбрать период</button>
           <button id="btn-profile-month" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#bbb;font-size:13px;font-weight:600;cursor:pointer;padding:10px 16px;display:flex;align-items:center;gap:7px;white-space:nowrap">👤 Личный кабинет</button>
           <button id="btn-settings-month" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#bbb;font-size:13px;font-weight:600;cursor:pointer;padding:10px 16px;display:flex;align-items:center;gap:7px;white-space:nowrap">⚙️ Настройки</button>
         </div>
@@ -692,10 +696,33 @@ function ratesBarHtml() {
 }
 
 function monthTxs() {
-  const all = state.activeMonth
-    ? state.transactions.filter(t => getMonthKey(t.date) === state.activeMonth)
-    : state.transactions;
+  const all = state.transactions;
+  const p = state.activePeriod;
+  if (!p) {
+    return state.activeMonth
+      ? all.filter(t => getMonthKey(t.date) === state.activeMonth)
+      : all;
+  }
+  if (p.mode === 'month') return all.filter(t => getMonthKey(t.date) === p.month);
+  if (p.mode === 'year')  return all.filter(t => (t.date||'').startsWith(p.year + '-'));
+  if (p.mode === 'range') {
+    const from = p.from, to = p.to;
+    return all.filter(t => t.date >= from && t.date <= to);
+  }
   return all;
+}
+
+function activePeriodLabel() {
+  const p = state.activePeriod;
+  if (!p) {
+    if (!state.activeMonth) return 'Все время';
+    const [y,m] = state.activeMonth.split('-');
+    return MONTHS[parseInt(m)-1] + ' ' + y;
+  }
+  if (p.mode === 'month') { const [y,m] = p.month.split('-'); return MONTHS[parseInt(m)-1] + ' ' + y; }
+  if (p.mode === 'year')  return 'Весь ' + p.year;
+  if (p.mode === 'range') return p.from + ' — ' + p.to;
+  return '';
 }
 function monthTxsWithTransfers() {
   // For account views: show all transactions (including transfers) for the active month
@@ -2315,6 +2342,7 @@ function modalHtml() {
   const catsOut = getDirCats(f.direction, 'out').map(c => `<option value="${c}" ${f.category===c?'selected':''}>${c}</option>`).join('');
 
   const isDDS = f.type === 'transfer';
+  const isDividend = f.type === 'dividend';
   const allAccounts = Object.entries(state.accounts);
   const toAccounts  = allAccounts.filter(([k]) => k !== f.account);
 
@@ -2330,9 +2358,10 @@ function modalHtml() {
             <div>
               <div class="form-label">Тип</div>
               <select class="form-inp" id="f-type">
-                <option value="income"   ${f.type==='income'  ?'selected':''}>💚 Доход</option>
-                <option value="expense"  ${f.type==='expense' ?'selected':''}>🔴 Расход</option>
-                <option value="transfer" ${f.type==='transfer'?'selected':''}>🟡 Перевод</option>
+                <option value="income"   ${f.type==='income'   ?'selected':''}>🟢 Доход</option>
+                <option value="expense"  ${f.type==='expense'  ?'selected':''}>🔴 Расход</option>
+                <option value="transfer" ${f.type==='transfer' ?'selected':''}>🟡 Перевод</option>
+                <option value="dividend" ${f.type==='dividend' ?'selected':''}>🟣 Дивиденды</option>
               </select>
             </div>
             <div>
@@ -2352,6 +2381,32 @@ function modalHtml() {
             <div class="form-label">🔵 Куда (зачислить)</div>
             <select class="form-inp" id="f-to-account">
               ${toAccounts.map(([k,a]) => `<option value="${k}" ${f.toAccount===k?'selected':''}>${a.name} · ${a.currency}</option>`).join('')}
+            </select>
+          </div>
+          ` : isDividend ? `
+          <div>
+            <div class="form-label">Направление</div>
+            <select class="form-inp" id="f-direction">
+              ${Object.entries(DIRECTIONS).map(([k,v]) => `<option value="${k}" ${f.direction===k?'selected':''}>${v.icon} ${v.label}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <div class="form-label">Кому выплачиваем</div>
+            <select class="form-inp" id="f-div-partner">
+              ${(()=>{
+                const dir = DIRECTIONS[f.direction] || {};
+                const partners = dir.partners || [];
+                if (!partners.length) return '<option value="">— нет партнёров —</option>';
+                return partners.map(p =>
+                  `<option value="${p.id}" ${f.divPartnerId===p.id?'selected':''}>${p.isOwner?'👑':'🤝'} ${p.name||'—'} · ${(p.share*100).toFixed(0)}%</option>`
+                ).join('');
+              })()}
+            </select>
+          </div>
+          <div>
+            <div class="form-label">Счёт (списать с)</div>
+            <select class="form-inp" id="f-account">
+              ${dirAccounts.map(([k,a]) => `<option value="${k}" data-currency="${a.currency}" ${f.account===k?'selected':''}>${a.name} · ${fmt(a.balance, a.currency)}</option>`).join('')}
             </select>
           </div>
           ` : `
@@ -2389,6 +2444,7 @@ function modalHtml() {
           </div>
           ` : ''}
 
+          ${!isDividend ? `
           <div>
             <div class="form-label">Категория</div>
             <select class="form-inp" id="f-category">
@@ -2400,12 +2456,81 @@ function modalHtml() {
                   : `<optgroup label="Расходы">${catsOut}</optgroup>`
               }
             </select>
-          </div>
+          </div>` : ''}
           <div>
             <div class="form-label">Комментарий</div>
             <input type="text" placeholder="Необязательно..." class="form-inp" id="f-note" value="${f.note}">
           </div>
           <button class="btn-submit" id="btn-submit">Добавить операцию</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function periodModalHtml() {
+  const p = state.activePeriod || {};
+  const mode = p.mode || 'month';
+
+  // Build year options (from earliest tx to current year)
+  const years = [...new Set(state.transactions.map(t => (t.date||'').slice(0,4)).filter(Boolean))].sort().reverse();
+  if (!years.includes(new Date().getFullYear().toString())) years.unshift(new Date().getFullYear().toString());
+  const yearOpts = years.map(y => `<option value="${y}" ${p.year===y?'selected':''}>${y}</option>`).join('');
+
+  // Month options
+  const allMk = [...new Set(state.transactions.map(t => getMonthKey(t.date)))].sort().reverse();
+  const curMk = state.activeMonth || getMonthKey(new Date().toISOString().slice(0,10));
+  const monthOpts = allMk.map(mk => {
+    const [y,m] = mk.split('-');
+    return `<option value="${mk}" ${(p.month||curMk)===mk?'selected':''}>${MONTHS[parseInt(m)-1]} ${y}</option>`;
+  }).join('');
+
+  const btnStyle = (m) => `padding:10px 14px;border-radius:10px;border:1px solid ${mode===m?'rgba(167,139,250,0.5)':'rgba(255,255,255,0.1)'};background:${mode===m?'rgba(167,139,250,0.12)':'rgba(255,255,255,0.04)'};color:${mode===m?'#a78bfa':'#888'};cursor:pointer;font-size:13px;font-weight:${mode===m?'700':'400'};flex:1;transition:all 0.15s`;
+
+  return `
+    <div class="modal-bg" id="period-modal-bg">
+      <div class="modal" style="max-width:400px">
+        <div class="modal-header">
+          <span class="modal-title">📅 Выбор периода</span>
+          <button class="modal-close" id="period-modal-close">×</button>
+        </div>
+        <div class="form-grid">
+
+          <!-- Mode tabs -->
+          <div style="display:flex;gap:8px">
+            <button id="pmode-month" style="${btnStyle('month')}">📅 Месяц</button>
+            <button id="pmode-year"  style="${btnStyle('year')}">📆 Год</button>
+            <button id="pmode-range" style="${btnStyle('range')}">🗓 Период</button>
+          </div>
+
+          <!-- Month picker -->
+          ${mode === 'month' ? `
+          <div>
+            <div class="form-label">Выберите месяц</div>
+            <select class="form-inp" id="period-month">${monthOpts}</select>
+          </div>` : ''}
+
+          <!-- Year picker -->
+          ${mode === 'year' ? `
+          <div>
+            <div class="form-label">Выберите год</div>
+            <select class="form-inp" id="period-year">${yearOpts}</select>
+          </div>` : ''}
+
+          <!-- Range picker -->
+          ${mode === 'range' ? `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div>
+              <div class="form-label">С даты</div>
+              <input type="date" class="form-inp" id="period-from" value="${p.from||''}">
+            </div>
+            <div>
+              <div class="form-label">По дату</div>
+              <input type="date" class="form-inp" id="period-to" value="${p.to||''}">
+            </div>
+          </div>` : ''}
+
+          <button class="btn-submit" id="btn-period-apply">Применить период</button>
+          ${state.activePeriod ? `<button id="btn-period-reset" style="width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#888;cursor:pointer;font-size:13px;margin-top:-8px">Сбросить (показать весь месяц)</button>` : ''}
         </div>
       </div>
     </div>`;
@@ -3132,6 +3257,58 @@ function bindEvents() {
 
   // Header settings button — opens overlay modal
   // Settings buttons (header + month selector)
+  // ── Period modal ──
+  document.querySelectorAll('#btn-period-open').forEach(function(b) {
+    if (b) b.onclick = function() { state.showPeriodModal = true; render(); };
+  });
+  var periodBg    = document.getElementById('period-modal-bg');
+  var periodClose = document.getElementById('period-modal-close');
+  if (periodBg)    periodBg.onclick    = function(e) { if(e.target===periodBg){state.showPeriodModal=false;render();} };
+  if (periodClose) periodClose.onclick = function()  { state.showPeriodModal=false; render(); };
+
+  // Mode switchers
+  ['month','year','range'].forEach(function(m) {
+    var btn = document.getElementById('pmode-'+m);
+    if (btn) btn.onclick = function() {
+      if (!state.activePeriod) state.activePeriod = {};
+      state.activePeriod.mode = m;
+      render();
+    };
+  });
+
+  // Apply button
+  var applyBtn = document.getElementById('btn-period-apply');
+  if (applyBtn) applyBtn.onclick = function() {
+    var mode = (state.activePeriod || {}).mode || 'month';
+    if (mode === 'month') {
+      var mk = (document.getElementById('period-month')||{}).value;
+      if (!mk) return;
+      state.activePeriod = { mode: 'month', month: mk };
+      state.activeMonth = mk; // keep in sync for form defaults
+    } else if (mode === 'year') {
+      var yr = (document.getElementById('period-year')||{}).value;
+      if (!yr) return;
+      state.activePeriod = { mode: 'year', year: yr };
+    } else if (mode === 'range') {
+      var from = (document.getElementById('period-from')||{}).value;
+      var to   = (document.getElementById('period-to')||{}).value;
+      if (!from || !to) { alert('Укажи обе даты'); return; }
+      if (from > to) { alert('Дата «С» должна быть раньше даты «По»'); return; }
+      state.activePeriod = { mode: 'range', from, to };
+    }
+    state.showPeriodModal = false;
+    state.tab = 'overview';
+    render();
+  };
+
+  // Reset button
+  var resetBtn = document.getElementById('btn-period-reset');
+  if (resetBtn) resetBtn.onclick = function() {
+    state.activePeriod = null;
+    state.showPeriodModal = false;
+    render();
+  };
+
   ['btn-settings-header','btn-settings-month'].forEach(function(id) {
     var b = document.getElementById(id);
     if (b) b.onclick = function() { state.showSettingsModal = true; render(); };
@@ -3698,12 +3875,13 @@ function bindEvents() {
   if (mb) mb.onclick = (e) => { if (e.target === mb) { state.showModal = false; render(); } };
 
   // form live update
-  ['f-type','f-date','f-direction','f-account','f-to-account','f-amount','f-to-amount','f-currency','f-category','f-note'].forEach(id => {
+  ['f-type','f-date','f-direction','f-account','f-to-account','f-amount','f-to-amount','f-currency','f-category','f-note','f-div-partner'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.oninput = el.onchange = () => {
-      const key = id.replace('f-','');
-      state.form[key] = (id === 'f-amount' || id === 'f-to-amount') ? el.value.replace(/\s/g,'') : el.value;
+      const key = id.replace('f-','').replace('-','_');
+      if (id === 'f-div-partner') { state.form.divPartnerId = el.value; return; }
+      state.form[id.replace('f-','')] = (id === 'f-amount' || id === 'f-to-amount') ? el.value.replace(/\s/g,'') : el.value;
       if (id === 'f-type') {
         state.form.category = '';
         render();
@@ -3711,6 +3889,7 @@ function bindEvents() {
       if (id === 'f-direction') {
         const first = Object.entries(state.accounts).find(([,a]) => a.direction === el.value);
         if (first) { state.form.account = first[0]; state.form.currency = first[1].currency; }
+        if (state.form.type === 'dividend') { state.form.divPartnerId = null; }
         render();
       }
       if (id === 'f-account') {
@@ -3742,7 +3921,7 @@ function bindEvents() {
     const rawAmt    = get('f-amount').replace(/\s/g,'');
 
     if (!rawAmt || parseFloat(rawAmt) <= 0) { alert('Укажи сумму'); return; }
-    if (!category) { alert('Выбери категорию'); return; }
+    if (!category && type !== 'dividend') { alert('Выбери категорию'); return; }
 
     const id = Date.now().toString();
 
@@ -3764,6 +3943,36 @@ function bindEvents() {
         fromCurrency: currency, toCurrency: toAcc.currency,
         category, note, createdAt: Date.now(), createdAtMs: Date.now(), updatedAtMs: null, isTransfer: true
       });
+    } else if (type === 'dividend') {
+      const divPartnerId = (document.getElementById('f-div-partner')||{}).value || '';
+      const dir = DIRECTIONS[direction] || {};
+      const partner = (dir.partners||[]).find(p => p.id === divPartnerId);
+      const partnerName = partner ? partner.name : '—';
+      const isOwner = partner?.isOwner || false;
+      const acc = state.accounts[account];
+      if (!acc) { alert('Счёт не найден'); return; }
+      const amt = parseFloat(rawAmt);
+      acc.balance -= amt;
+      const ppId = 'pp_manual_' + Date.now();
+      const txId = 'tr_' + id;
+      // Save to partnerPayments
+      if (partner) {
+        if (!state.partnerPayments[direction]) state.partnerPayments[direction] = {};
+        if (!state.partnerPayments[direction][divPartnerId]) state.partnerPayments[direction][divPartnerId] = [];
+        state.partnerPayments[direction][divPartnerId].push({
+          id: ppId, txId, date, amount: amt, currency, note,
+          account, createdAtMs: Date.now(), isOwnerDividend: isOwner,
+        });
+      }
+      state.transactions.push({
+        id: txId, date, type: 'dividend',
+        direction, account,
+        amount: amt, currency,
+        category: isOwner ? 'Дивиденды собственника' : 'Дивиденды партнёру',
+        note: note || (isOwner ? 'Дивиденды собственника' : 'Выплата: ' + partnerName),
+        createdAt: Date.now(), createdAtMs: Date.now(), updatedAtMs: null,
+        partnerPayId: ppId, partnerId: divPartnerId, partnerDirKey: direction,
+      });
     } else {
       const tx = {
         id, date, type, direction, account,
@@ -3774,7 +3983,7 @@ function bindEvents() {
       state.transactions.push(tx);
       const acc = state.accounts[tx.account];
       if (acc) {
-        if (tx.type === 'income') acc.balance += tx.amount; // dividend handled separately
+        if (tx.type === 'income') acc.balance += tx.amount;
         else acc.balance -= tx.amount;
       }
     }
@@ -4457,6 +4666,7 @@ function applyTheme() {
     if (p.partnerPayments)                                state.partnerPayments = p.partnerPayments;
   if (p.dirOrder)                                       state.dirOrder = p.dirOrder;
   if (p.accOrder)                                       state.accOrder = p.accOrder;
+  if (p.activePeriod !== undefined)                     state.activePeriod = p.activePeriod;
     if (p.rates      && Object.keys(p.rates).length)      state.rates           = p.rates;
     if (Array.isArray(p.enabledCurrencies) && p.enabledCurrencies.length)
                                                           state.enabledCurrencies = p.enabledCurrencies;
