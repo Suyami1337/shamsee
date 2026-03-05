@@ -667,8 +667,9 @@ function monthSelectorHtml() {
 }
 
 function headerHtml() {
-  const [year, month] = state.activeMonth.split("-");
-  const monthName = MONTHS[parseInt(month)-1];
+  const am = state.activeMonth || '';
+  const [year, month] = am ? am.split('-') : ['', ''];
+  const monthName = month ? MONTHS[parseInt(month)-1] : '';
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;background:rgba(15,15,25,0.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,0.07);position:fixed;top:0;left:0;right:0;z-index:100">
       <div style="display:flex;align-items:center;gap:8px">
@@ -728,14 +729,14 @@ async function loadAllProjects() {
 function activePeriodLabel() {
   const p = state.activePeriod;
   if (!p) {
-    if (!state.activeMonth) return 'Все время';
+    if (!state.activeMonth) return 'Весь период';
     const [y,m] = state.activeMonth.split('-');
     return MONTHS[parseInt(m)-1] + ' ' + y;
   }
-  if (p.mode === 'month') { const [y,m] = p.month.split('-'); return MONTHS[parseInt(m)-1] + ' ' + y; }
+  if (p.mode === 'month') { const [y,m] = (p.month||'').split('-'); return (MONTHS[parseInt(m)-1]||'') + ' ' + y; }
   if (p.mode === 'year')  return 'Весь ' + p.year;
   if (p.mode === 'range') return p.from + ' — ' + p.to;
-  return '';
+  return 'Период';
 }
 function monthTxsWithTransfers() {
   // For account views: show all transactions (including transfers) for the active month
