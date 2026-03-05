@@ -34,7 +34,8 @@
   .tab.active { background: linear-gradient(135deg, rgba(110,231,183,0.15), rgba(59,130,246,0.15)); border: 1px solid rgba(110,231,183,0.2); color:#fff; font-weight: 700; }
   .tab:hover:not(.active) { color: #bbb; background: rgba(255,255,255,0.04); }
   .dir-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 20px; }
-  .dir-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 20px; padding: 24px; cursor: pointer; transition: all 0.2s; }
+  .dir-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 20px; padding: 24px; cursor: grab; transition: all 0.2s; }
+  .dir-card:active { cursor: grabbing; }
   .dir-card:hover { border-color: rgba(255,255,255,0.15); }
   .dir-card.active-adam { background: rgba(147,197,253,0.08); border-color: #93c5fd; }
   .dir-card.active-shamsee { background: rgba(251,191,36,0.08); border-color: #fbbf24; }
@@ -333,6 +334,8 @@ let state = {
   transactions: [],
   directions: JSON.parse(JSON.stringify(DEFAULT_DIRECTIONS)),
   accounts: JSON.parse(JSON.stringify(INITIAL_ACCOUNTS)),
+  dirOrder: null,  // null = use Object.keys order; array of dirKeys when reordered
+  accOrder: null,  // null = use Object.keys order; array of accKeys when reordered
   // per-direction categories: { dirKey: { in: [...], out: [...] } }
   dirCategories: {},
   // partner payments: { dirKey: [{ id, date, amount, note }] }
@@ -439,7 +442,7 @@ function syncCatState() {
 }
 
 function getFullState() {
-  return { transactions: state.transactions, accounts: state.accounts, funds: state.funds, fundHistory: state.fundHistory, directions: state.directions, dirCategories: state.dirCategories, partnerPayments: state.partnerPayments, rates: state.rates, enabledCurrencies: state.enabledCurrencies, theme: state.theme, lang: state.lang };
+  return { transactions: state.transactions, accounts: state.accounts, funds: state.funds, fundHistory: state.fundHistory, directions: state.directions, dirCategories: state.dirCategories, partnerPayments: state.partnerPayments, rates: state.rates, enabledCurrencies: state.enabledCurrencies, theme: state.theme, lang: state.lang, dirOrder: state.dirOrder, accOrder: state.accOrder };
 }
 
 function saveToStorage() {
@@ -465,6 +468,18 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ─── UTILS ─────────────────────────────────────────────────────────────────
+function getOrderedDirs() {
+  const keys = Object.keys(DIRECTIONS);
+  if (!state.dirOrder) return keys;
+  return [...state.dirOrder.filter(k => keys.includes(k)), ...keys.filter(k => !state.dirOrder.includes(k))];
+}
+
+function getOrderedAccounts() {
+  const keys = Object.keys(state.accounts);
+  if (!state.accOrder) return keys;
+  return [...state.accOrder.filter(k => keys.includes(k)), ...keys.filter(k => !state.accOrder.includes(k))];
+}
+
 function toRub(amount, currency) {
   if (!currency || currency === 'RUB') return amount;
   const rate = state.rates[currency];
@@ -495,8 +510,14 @@ function getRawValue(el) {
 
 function fmt(n, currency) {
   currency = currency || 'RUB';
-  const sym = currency === 'SAR' ? ' ﷼' : currency === 'USDT' ? ' ₮' : ' ₽';
-  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(n) + sym;
+  const sym = currency === 'SAR' ? ' ﷼' : currency === 'USDT' ? ' ₮' : currency === 'USD' ? ' $' : currency === 'EUR' ? ' €' : ' ₽';
+  const num = parseFloat(n) || 0;
+  // Show up to 2 decimal places, but only if there are non-zero cents
+  const hasDecimals = Math.abs(num - Math.round(num)) >= 0.005;
+  return new Intl.NumberFormat('ru-RU', {
+    minimumFractionDigits: hasDecimals ? 2 : 0,
+    maximumFractionDigits: 2,
+  }).format(num) + sym;
 }
 
 function getMonthKey(date) {
@@ -728,7 +749,7 @@ function overviewHtml() {
       <div style="font-size:13px;color:#555">Направления</div>
       <button id="btn-add-dir" style="padding:4px 10px;border-radius:8px;border:1px solid rgba(167,139,250,0.3);background:rgba(167,139,250,0.07);color:#a78bfa;cursor:pointer;font-size:12px">+ Добавить</button>
     </div>
-    <div class="dir-grid">${Object.keys(DIRECTIONS).map(k => dirCardHtml(k)).join('')}</div>
+    <div class="dir-grid" id="dir-grid">${getOrderedDirs().map(k => dirCardHtml(k)).join('')}</div>
     ${state.showAddDirModal  ? addDirModalHtml()  : ''}
     ${state.showEditDirModal ? editDirModalHtml() : ''}
 
@@ -765,7 +786,7 @@ function dirCardHtml(k) {
   }).join('');
 
   return `
-    <div class="dir-card ${active}" data-dir="${k}" style="border-color:${dir.color}33">
+    <div class="dir-card ${active}" data-dir="${k}" data-drag-dir="${k}" draggable="true" style="border-color:${dir.color}33">
       <div class="dir-header" style="display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:10px">
           <span class="dir-icon">${dir.icon}</span>
@@ -831,22 +852,26 @@ function accountsHtml() {
   const accs = Object.entries(state.accounts);
   const total = accs.reduce((s,[,a]) => s + toRub(a.balance, a.currency), 0);
 
-  // Group accounts by direction, preserving DIRECTIONS order
-  const dirOrder = Object.keys(DIRECTIONS);
+  // Group accounts by direction, preserving user-defined order
+  const orderedDirKeys = getOrderedDirs();
+  const orderedAccKeys = getOrderedAccounts();
   const grouped = {};
-  dirOrder.forEach(dk => { grouped[dk] = []; });
-  accs.forEach(([k,a]) => {
+  orderedDirKeys.forEach(dk => { grouped[dk] = []; });
+  orderedAccKeys.forEach(k => {
+    const a = state.accounts[k];
+    if (!a) return;
     if (!grouped[a.direction]) grouped[a.direction] = [];
     grouped[a.direction].push([k,a]);
   });
 
-  const rows = Object.entries(grouped).filter(([,list]) => list.length > 0).map(([dk, list]) => {
+  const rows = orderedDirKeys.filter(dk => grouped[dk]?.length > 0).map(dk => {
+    const list = grouped[dk];
     const dir = DIRECTIONS[dk] || {};
     const dirTotal = list.reduce((s,[,a]) => s + toRub(a.balance, a.currency), 0);
     const accRows = list.map(([k,a]) => {
       const subbal = a.currency !== 'RUB' ? `<div class="sub">≈ ${fmt(toRub(a.balance, a.currency))}</div>` : '';
       return `
-        <div class="accounts-row" style="grid-template-columns:auto 1fr auto auto auto auto auto;gap:8px;align-items:center">
+        <div class="accounts-row" data-drag-acc="${k}" draggable="true" style="grid-template-columns:auto 1fr auto auto auto auto auto;gap:8px;align-items:center;cursor:grab">
           <div class="acc-dot" style="background:${dir?.color||a.color||'#666'}"></div>
           <div style="display:flex;align-items:center;gap:6px">
             <div><div class="acc-name">${a.name}</div></div>
@@ -854,9 +879,9 @@ function accountsHtml() {
           </div>
           <div class="acc-bal"><div class="main">${fmt(a.balance, a.currency)}</div>${subbal}</div>
           <button data-acc-history="${k}" data-acc-dir="${a.direction}" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#888;cursor:pointer;font-size:12px;white-space:nowrap">📋 История</button>
-          <button data-acc-action="income" data-acc-key="${k}" data-acc-dir="${a.direction}" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(110,231,183,0.3);background:rgba(110,231,183,0.07);color:#6ee7b7;cursor:pointer;font-size:12px;white-space:nowrap">+ Доход</button>
-          <button data-acc-action="expense" data-acc-key="${k}" data-acc-dir="${a.direction}" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.07);color:#f87171;cursor:pointer;font-size:12px;white-space:nowrap">− Расход</button>
-          <button data-acc-action="transfer" data-acc-key="${k}" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(251,191,36,0.3);background:rgba(251,191,36,0.07);color:#fbbf24;cursor:pointer;font-size:12px;white-space:nowrap">🔄 Перевод</button>
+          <button data-acc-action="income" data-acc-key="${k}" data-acc-dir="${a.direction}" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(110,231,183,0.3);background:rgba(110,231,183,0.07);color:#6ee7b7;cursor:pointer;font-size:12px;white-space:nowrap">🟢 Доход</button>
+          <button data-acc-action="expense" data-acc-key="${k}" data-acc-dir="${a.direction}" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.07);color:#f87171;cursor:pointer;font-size:12px;white-space:nowrap">🔴 Расход</button>
+          <button data-acc-action="transfer" data-acc-key="${k}" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(251,191,36,0.3);background:rgba(251,191,36,0.07);color:#fbbf24;cursor:pointer;font-size:12px;white-space:nowrap">🟡 Перевод</button>
         </div>`;
     }).join('');
 
@@ -1119,7 +1144,7 @@ function transactionsHtml() {
   // Direction tabs
   const dirTabs = [
     `<button class="filter-btn ${!state.activeDir?'active':''}" data-filter="">Все счета</button>`,
-    ...Object.entries(DIRECTIONS).map(([k,v]) => {
+    ...getOrderedDirs().map(k => { const v = DIRECTIONS[k];
       const dirBal = Object.values(state.accounts).filter(a=>a.direction===k).reduce((s,a)=>s+toRub(a.balance,a.currency),0);
       const balStr = `<span style="font-size:10px;opacity:0.7;margin-left:4px">${fmt(dirBal)}</span>`;
       return `<button class="filter-btn ${state.activeDir===k?'active':''}" data-filter="${k}">${v.icon} ${v.label}${balStr}</button>`;
@@ -4430,6 +4455,8 @@ function applyTheme() {
     if (p.directions && Object.keys(p.directions).length) state.directions      = p.directions;
     if (p.dirCategories)                                  state.dirCategories   = p.dirCategories;
     if (p.partnerPayments)                                state.partnerPayments = p.partnerPayments;
+  if (p.dirOrder)                                       state.dirOrder = p.dirOrder;
+  if (p.accOrder)                                       state.accOrder = p.accOrder;
     if (p.rates      && Object.keys(p.rates).length)      state.rates           = p.rates;
     if (Array.isArray(p.enabledCurrencies) && p.enabledCurrencies.length)
                                                           state.enabledCurrencies = p.enabledCurrencies;
@@ -4944,6 +4971,79 @@ function applyTheme() {
       state.showEditTxModal = null;
       saveToStorage();
       render();
+      return;
+    }
+  });
+
+  // ── Drag-and-drop: Directions ──
+  let dragDirKey = null;
+  document.addEventListener('dragstart', function(e) {
+    const el = e.target.closest('[data-drag-dir]');
+    if (el) {
+      dragDirKey = el.dataset.dragDir;
+      el.style.opacity = '0.4';
+      e.dataTransfer.effectAllowed = 'move';
+    }
+    const accEl = e.target.closest('[data-drag-acc]');
+    if (accEl) {
+      dragAccKey = accEl.dataset.dragAcc;
+      accEl.style.opacity = '0.4';
+      e.dataTransfer.effectAllowed = 'move';
+    }
+  });
+
+  document.addEventListener('dragend', function(e) {
+    const el = e.target.closest('[data-drag-dir]');
+    if (el) el.style.opacity = '';
+    const accEl = e.target.closest('[data-drag-acc]');
+    if (accEl) accEl.style.opacity = '';
+  });
+
+  document.addEventListener('dragover', function(e) {
+    if (dragDirKey || dragAccKey) e.preventDefault();
+  });
+
+  let dragAccKey = null;
+  document.addEventListener('drop', function(e) {
+    // ── Drop on direction card ──
+    if (dragDirKey) {
+      const target = e.target.closest('[data-drag-dir]');
+      if (target && target.dataset.dragDir !== dragDirKey) {
+        const order = getOrderedDirs();
+        const fromIdx = order.indexOf(dragDirKey);
+        const toIdx   = order.indexOf(target.dataset.dragDir);
+        if (fromIdx >= 0 && toIdx >= 0) {
+          order.splice(fromIdx, 1);
+          order.splice(toIdx, 0, dragDirKey);
+          state.dirOrder = order;
+          saveToStorage();
+          render();
+        }
+      }
+      dragDirKey = null;
+      return;
+    }
+    // ── Drop on account row ──
+    if (dragAccKey) {
+      const target = e.target.closest('[data-drag-acc]');
+      if (target && target.dataset.dragAcc !== dragAccKey) {
+        const dragAcc   = state.accounts[dragAccKey];
+        const targetAcc = state.accounts[target.dataset.dragAcc];
+        // Only allow reorder within same direction
+        if (dragAcc && targetAcc && dragAcc.direction === targetAcc.direction) {
+          const order = getOrderedAccounts();
+          const fromIdx = order.indexOf(dragAccKey);
+          const toIdx   = order.indexOf(target.dataset.dragAcc);
+          if (fromIdx >= 0 && toIdx >= 0) {
+            order.splice(fromIdx, 1);
+            order.splice(toIdx, 0, dragAccKey);
+            state.accOrder = order;
+            saveToStorage();
+            render();
+          }
+        }
+      }
+      dragAccKey = null;
       return;
     }
   });
