@@ -628,10 +628,10 @@ function monthSelectorHtml() {
         <div class="month-year">${year}</div>
         ${hasData ? `
           <div class="month-stats">
-            <div class="month-stat-row"><span style="color:#6ee7b7">💚</span><span>${fmt(income)}</span></div>
-            <div class="month-stat-row"><span style="color:#f87171">🔴</span><span>${fmt(expense)}</span></div>
+            <div class="month-stat-row"><span>🟢</span><span>${fmt(income)}</span></div>
+            <div class="month-stat-row"><span>🔴</span><span>${fmt(expense)}</span></div>
             <div class="month-stat-row" style="border-top:1px solid rgba(255,255,255,0.08);padding-top:6px;margin-top:4px">
-              <span style="color:#a78bfa">💜</span>
+              <span>🟣</span>
               <span style="color:${profit>=0?'#a78bfa':'#f87171'};font-weight:700">${fmt(profit)}</span>
             </div>
           </div>
@@ -677,7 +677,6 @@ function headerHtml() {
         <button id="btn-open-project-switcher" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;padding:7px 14px;display:flex;align-items:center;gap:8px;white-space:nowrap">
           <span>${_projectEmoji}</span><span>${_projectName || 'MyFinanceAI'}</span><span style="color:#555;font-size:11px">▾</span>
         </button>
-        <div style="font-size:13px;color:#555;font-weight:500">${monthName} ${year}</div>
       </div>
       <button class="btn-add" id="btn-add" style="position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:15px;padding:11px 28px;border-radius:14px;font-weight:800">+ Операция</button>
       <div style="display:flex;align-items:center;gap:8px">
@@ -3362,6 +3361,21 @@ function bindEvents() {
     var b = document.getElementById(id);
     if (b) b.onclick = function() { state.showSettingsModal = true; render(); };
   });
+
+  // Period button
+  var btnPeriodOpen = document.getElementById('btn-period-open');
+  if (btnPeriodOpen) btnPeriodOpen.onclick = function() { state.showPeriodModal = true; render(); };
+
+  // Project switcher button
+  var btnProjectSwitcher = document.getElementById('btn-open-project-switcher');
+  if (btnProjectSwitcher) btnProjectSwitcher.onclick = async function() {
+    state.showProjectSwitcher = true;
+    render();
+    if (!state._allProjects || !state._allProjects.length) {
+      await loadAllProjects();
+      render();
+    }
+  };
 
   // Profile/cabinet buttons
   ['btn-profile-month','btn-profile-dash'].forEach(function(id) {

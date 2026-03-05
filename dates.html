@@ -54,11 +54,21 @@ let _projectEmoji= '💼';
 const MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const START_YEAR = 2024;
 
+let _allProjects = [];
+async function loadAllProjects() {
+  if (!_currentUser) return;
+  try {
+    const { data } = await _SB.from('projects').select('id,name,emoji').eq('user_id', _currentUser.id).order('created_at');
+    if (data) _allProjects = data;
+  } catch(e) {}
+}
+
 let state = {
   transactions: [],
   rates: { SAR: 20.5, USDT: 77 },
   selectedYear: new Date().getFullYear(),
   showProfileModal: false,
+  showProjectSwitcher: false,
 };
 
 function toRub(amount, currency) {
@@ -135,10 +145,10 @@ function pageHtml() {
       <div class="month-year">${year}</div>
       ${hasData ? `
         <div class="month-stats">
-          <div class="month-stat-row"><span style="color:#6ee7b7">💚</span><span>${fmt(income)}</span></div>
-          <div class="month-stat-row"><span style="color:#f87171">🔴</span><span>${fmt(expense)}</span></div>
+          <div class="month-stat-row"><span>🟢</span><span>${fmt(income)}</span></div>
+          <div class="month-stat-row"><span>🔴</span><span>${fmt(expense)}</span></div>
           <div class="month-stat-row" style="border-top:1px solid rgba(255,255,255,0.08);padding-top:6px;margin-top:4px">
-            <span style="color:#a78bfa">💜</span>
+            <span>🟣</span>
             <span style="color:${profit>=0?'#a78bfa':'#f87171'};font-weight:700">${fmt(profit)}</span>
           </div>
         </div>
@@ -151,9 +161,11 @@ function pageHtml() {
     <div style="min-height:100vh">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;background:rgba(15,15,25,0.95);backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,0.07);position:fixed;top:0;left:0;right:0;z-index:100">
         <div style="display:flex;align-items:center;gap:10px">
-          <button id="btn-to-projects" style="background:none;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#888;font-size:12px;cursor:pointer;padding:5px 10px">← Проекты</button>
+          <button id="btn-to-projects" style="background:none;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#888;font-size:12px;cursor:pointer;padding:5px 10px">← Все проекты</button>
           <div style="width:1px;height:18px;background:rgba(255,255,255,0.08)"></div>
-          <div style="font-size:15px;font-weight:700;color:#fff">${_projectEmoji} ${_projectName}</div>
+          <button id="btn-open-project-switcher" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;padding:7px 14px;display:flex;align-items:center;gap:8px;white-space:nowrap">
+            <span>${_projectEmoji}</span><span>${_projectName}</span><span style="color:#555;font-size:11px">▾</span>
+          </button>
         </div>
         <div style="font-size:22px;font-weight:900;color:#fff;letter-spacing:-0.03em;position:absolute;left:50%;transform:translateX(-50%)">Выбор месяца</div>
         <div style="display:flex;gap:10px">
@@ -176,7 +188,41 @@ function pageHtml() {
       </div>
 
       ${state.showProfileModal ? profileModalHtml() : ''}
+      ${state.showProjectSwitcher ? projectSwitcherHtml() : ''}
     </div>`;
+}
+
+function projectSwitcherHtml() {
+  const projects = _allProjects || [];
+  const rows = projects.map(p => {
+    const isCurrent = p.id === _projectId;
+    return `<div data-switch-project="${p.id}" data-switch-name="${(p.name||'').replace(/"/g,'&quot;')}" data-switch-emoji="${p.emoji||'💼'}"
+      style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;cursor:${isCurrent?'default':'pointer'};
+             background:${isCurrent?'rgba(167,139,250,0.1)':'rgba(255,255,255,0.03)'};
+             border:1px solid ${isCurrent?'rgba(167,139,250,0.35)':'rgba(255,255,255,0.07)'}">
+      <span style="font-size:22px">${p.emoji||'💼'}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:${isCurrent?'700':'500'};color:${isCurrent?'#a78bfa':'#ccc'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name||'Без названия'}</div>
+        ${isCurrent ? '<div style="font-size:11px;color:#a78bfa;margin-top:2px">текущий проект</div>' : ''}
+      </div>
+      ${isCurrent ? '' : '<span style="color:#555;font-size:16px">→</span>'}
+    </div>`;
+  }).join('');
+
+  return `<div id="project-switcher-bg" style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:flex;align-items:center;justify-content:center">
+    <div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:0;width:100%;max-width:380px;overflow:hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid rgba(255,255,255,0.07)">
+        <span style="font-size:16px;font-weight:700;color:#fff">🗂 Проекты</span>
+        <button id="project-switcher-close" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#666;font-size:20px;cursor:pointer;padding:2px 10px;line-height:1">×</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;padding:16px">
+        ${rows.length ? rows : '<div style="color:#555;font-size:13px;padding:8px">Загрузка...</div>'}
+        <div style="margin-top:4px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.07)">
+          <button id="btn-go-all-projects" style="width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#888;cursor:pointer;font-size:13px">← Все проекты</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
 }
 
 function profileModalHtml() {
@@ -216,6 +262,26 @@ function profileModalHtml() {
 function bindEvents() {
   document.getElementById('app').addEventListener('click', function(e) {
     if (e.target.closest('#btn-to-projects')) { window.location.href = '/projects'; return; }
+    // Project switcher
+    if (e.target.closest('#btn-open-project-switcher')) {
+      state.showProjectSwitcher = true; render();
+      if (!_allProjects.length) loadAllProjects().then(() => render());
+      return;
+    }
+    if (e.target.id === 'project-switcher-bg' || e.target.closest('#project-switcher-close')) {
+      state.showProjectSwitcher = false; render(); return;
+    }
+    if (e.target.id === 'btn-go-all-projects') { window.location.href = '/projects'; return; }
+    const switchRow = e.target.closest('[data-switch-project]');
+    if (switchRow) {
+      const pid = switchRow.dataset.switchProject;
+      if (pid === _projectId) { state.showProjectSwitcher = false; render(); return; }
+      sessionStorage.setItem('active_project_id',    pid);
+      sessionStorage.setItem('active_project_name',  switchRow.dataset.switchName);
+      sessionStorage.setItem('active_project_emoji', switchRow.dataset.switchEmoji);
+      window.location.reload();
+      return;
+    }
     if (e.target.closest('#btn-profile')) { state.showProfileModal = true; render(); return; }
     if (e.target.closest('#btn-profile-close')) { state.showProfileModal = false; render(); return; }
     if (e.target.id === 'profile-modal-bg') { state.showProfileModal = false; render(); return; }
@@ -255,6 +321,7 @@ function bindEvents() {
     state.transactions = cloud.transactions || [];
     state.rates = cloud.rates || state.rates;
   }
+  loadAllProjects();
   render();
 })();
 </script>
