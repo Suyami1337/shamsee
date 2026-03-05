@@ -780,12 +780,12 @@ function dirCardHtml(k) {
           <div class="m-label">💰 Баланс</div>
           <div class="m-value" style="color:${balColor}">${fmt(dirBalance)}</div>
         </div>
-        <div class="metric metric-income"><div class="m-label">🟢 Доходы</div><div class="m-value">${fmt(s.income)}</div></div>
-        <div class="metric metric-expense"><div class="m-label">🔴 Расходы</div><div class="m-value">${fmt(s.expense)}</div></div>
         <div class="metric metric-profit ${netProfit<0?'metric-profit-neg':''}">
           <div class="m-label">🟣 Чистая прибыль</div>
           <div class="m-value">${fmt(netProfit)}</div>
         </div>
+        <div class="metric metric-income"><div class="m-label">🟢 Доходы</div><div class="m-value">${fmt(s.income)}</div></div>
+        <div class="metric metric-expense"><div class="m-label">🔴 Расходы</div><div class="m-value">${fmt(s.expense)}</div></div>
         ${partnerMetrics}
       </div>
     </div>`;
@@ -1779,24 +1779,23 @@ function pnlHtml() {
 
     return `
       <div class="card" style="margin-bottom:20px">
-        <div class="card-header" style="flex-wrap:wrap;gap:8px">
+        <div class="card-header">
           <span class="card-title" style="font-size:17px">${v.icon} ${v.label}</span>
-          ${(()=>{
-            const dirBal = Object.values(state.accounts).filter(a=>a.direction===k).reduce((s,a)=>s+toRub(a.balance,a.currency),0);
-            const balColor = dirBal >= 0 ? '#6ee7b7' : '#f87171';
-            return `<span style="font-size:13px;font-weight:700;color:${balColor};background:rgba(255,255,255,0.05);padding:4px 12px;border-radius:20px;font-family:monospace">💰 ${fmt(dirBal)}</span>`;
-          })()}
-          ${partners.filter(p=>!p.isOwner && p.name!=='Я').map(p=>`<span style="font-size:12px;color:#fbbf24">🤝 ${p.name}: ${fmt(profit>0?profit*p.share:0)} (${(p.share*100).toFixed(0)}%)</span>`).join(' · ')}
         </div>
 
-        <!-- Summary -->
-        <div class="odds-summary" style="grid-template-columns:repeat(${cols},1fr)">
+        <!-- Summary: баланс / доход / расход / прибыль / владелец / каждый партнёр -->
+        <div class="odds-summary" style="grid-template-columns:repeat(${Math.min(4 + partners.filter(p=>!p.isOwner&&p.name!=='Я').length + 1, 6)},1fr)">
+          ${(()=>{
+            const dirBal = Object.values(state.accounts).filter(a=>a.direction===k).reduce((s,a)=>s+toRub(a.balance,a.currency),0);
+            const balC = dirBal >= 0 ? '#6ee7b7' : '#f87171';
+            return `<div class="odds-sum-cell"><div class="os-label">💰 Баланс</div><div class="os-value" style="color:${balC}">${fmt(dirBal)}</div></div>`;
+          })()}
           <div class="odds-sum-cell"><div class="os-label">🟢 Доходы</div><div class="os-value" style="color:#6ee7b7">${fmt(totalIncome)}</div></div>
           <div class="odds-sum-cell"><div class="os-label">🔴 Расходы</div><div class="os-value" style="color:#f87171">${fmt(totalExpense)}</div></div>
-          <div class="odds-sum-cell"><div class="os-label">🟣 Прибыль</div><div class="os-value" style="color:${pc}">${fmt(profit)}</div></div>
-          ${partnerOnlyShare>0?`
-          <div class="odds-sum-cell"><div class="os-label">🤝 Партнёрам (${(partnerOnlyShare*100).toFixed(0)}%)</div><div class="os-value" style="color:#fbbf24">${fmt(pd)}</div></div>
-          <div class="odds-sum-cell"><div class="os-label">👑 ${myPart?.name||'Владелец'} (${(myShare*100).toFixed(0)}%)</div><div class="os-value" style="color:${myc}">${fmt(my)}</div></div>`:''}
+          <div class="odds-sum-cell"><div class="os-label">🟣 Чистая прибыль</div><div class="os-value" style="color:${pc}">${fmt(profit)}</div></div>
+          <div class="odds-sum-cell"><div class="os-label">👑 ${myPart?.name||'Владелец'} (${(myShare*100).toFixed(0)}%)</div><div class="os-value" style="color:${myc}">${fmt(my)}</div></div>
+          ${partners.filter(p=>!p.isOwner&&p.name!=='Я').map(p=>`
+          <div class="odds-sum-cell"><div class="os-label">🤝 ${p.name} (${(p.share*100).toFixed(0)}%)</div><div class="os-value" style="color:#fbbf24">${fmt(profit>0?profit*p.share:0)}</div></div>`).join('')}
         </div>
 
         <!-- Categories -->
