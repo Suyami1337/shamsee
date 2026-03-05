@@ -344,7 +344,7 @@ let state = {
   showExportModal: false,
   showSettingsModal: false,
   showProfileModal: false,
-  txTypeFilter: ['income','expense','transfer'], // active types
+  txTypeFilter: ['income','expense','transfer','dividend'], // active types
   funds: JSON.parse(JSON.stringify(INITIAL_FUNDS)),
   fundHistory: [],
   tab: 'overview',
@@ -987,7 +987,7 @@ function editTxModalHtml(txId) {
     `<option value="${k}">${a.name} (${a.currency})</option>`).join('');
   const accOptsFor = (selKey) => Object.entries(state.accounts)
     .map(([k,a]) => `<option value="${k}" ${k===selKey?'selected':''}>${a.name} (${a.currency})</option>`).join('');
-  const typeOpts = [['income','💚 Доход'],['expense','🔴 Расход'],['transfer','🟡 Перевод']]
+  const typeOpts = [['income','💚 Доход'],['expense','🔴 Расход'],['transfer','🟡 Перевод'],['dividend','÷ Дивиденды']]
     .map(([v,l]) => `<option value="${v}" ${t.type===v?'selected':''}>${l}</option>`).join('');
   const date = t.date || '';
   const note = (t.note||'').replace(/"/g,'&quot;');
@@ -1102,6 +1102,7 @@ function transactionsHtml() {
     ['income','💚 Доход','#6ee7b7','rgba(110,231,183,0.12)','rgba(110,231,183,0.3)'],
     ['expense','🔴 Расход','#f87171','rgba(239,68,68,0.12)','rgba(239,68,68,0.3)'],
     ['transfer','🟡 Перевод','#fbbf24','rgba(251,191,36,0.12)','rgba(251,191,36,0.3)'],
+    ['dividend','÷ Дивиденды','#a78bfa','rgba(167,139,250,0.12)','rgba(167,139,250,0.3)'],
   ];
   const typeFilterBar = `<div style="display:flex;gap:8px;padding:8px 16px;flex-wrap:wrap">` +
     typeFilters.map(([type,label,color,bg,border]) => {
@@ -1110,7 +1111,7 @@ function transactionsHtml() {
     }).join('') + `</div>`;
 
   if (!state.activeDir) {
-    const sorted = [...monthTxs()].filter(t => !t.isFundTarget && (t.isTransfer || state.txTypeFilter.includes(t.type))).sort((a,b) => { const dd = new Date(b.date) - new Date(a.date); return dd !== 0 ? dd : (b.createdAt||0) - (a.createdAt||0); });
+    const sorted = [...monthTxs()].filter(t => !t.isFundTarget && (t.isTransfer || t.type === 'dividend' || state.txTypeFilter.includes(t.type))).sort((a,b) => { const dd = new Date(b.date) - new Date(a.date); return dd !== 0 ? dd : (b.createdAt||0) - (a.createdAt||0); });
     const txHtml = sorted.length === 0
       ? `<div class="empty">Нет операций. Нажмите «+ Операция» чтобы начать!</div>`
       : sorted.slice(0,100).map(t => txItemHtml(t)).join('');
@@ -1160,7 +1161,7 @@ function transactionsHtml() {
     : monthTxs().filter(t => t.direction === state.activeDir);
 
   const filtered = allForDir.filter(t => !t.isFundTarget);
-  const sorted = [...filtered].filter(t => t.isTransfer || state.txTypeFilter.includes(t.type)).sort((a,b) => { const dd = new Date(b.date) - new Date(a.date); return dd !== 0 ? dd : (b.createdAt||0)-(a.createdAt||0); });
+  const sorted = [...filtered].filter(t => t.isTransfer || t.type === 'dividend' || state.txTypeFilter.includes(t.type)).sort((a,b) => { const dd = new Date(b.date) - new Date(a.date); return dd !== 0 ? dd : (b.createdAt||0)-(a.createdAt||0); });
 
   const txHtml = sorted.length === 0
     ? `<div class="empty">Нет операций по этому счёту</div>`
@@ -1213,11 +1214,12 @@ function txItemHtml(t) {
 
   // ── REGULAR ─────────────────────────────────────────────────────────────────
   const acc  = state.accounts[t.account];
-  const sign = t.type === 'income' ? '+' : t.type === 'transfer' ? '⇄' : '-';
-  const amtColor  = t.type==='income'?'#6ee7b7':t.type==='expense'?'#f87171':t.type==='dds_in'?'#93c5fd':'#fbbf24';
-  const typeLabel = t.type==='income'?'Доход':t.type==='expense'?'Расход':t.type==='transfer'?'Перевод':'Неизвестно';
-  const typeBg    = t.type==='income'?'rgba(110,231,183,0.08)':t.type==='expense'?'rgba(239,68,68,0.08)':'rgba(251,191,36,0.08)';
-  const typeBorder= t.type==='income'?'rgba(110,231,183,0.2)':t.type==='expense'?'rgba(239,68,68,0.2)':'rgba(251,191,36,0.2)';
+  const isDividend = t.type === 'dividend';
+  const sign = t.type === 'income' ? '+' : t.type === 'transfer' ? '⇄' : isDividend ? '÷' : '-';
+  const amtColor  = t.type==='income'?'#6ee7b7':t.type==='expense'?'#f87171':isDividend?'#a78bfa':'#fbbf24';
+  const typeLabel = t.type==='income'?'Доход':t.type==='expense'?'Расход':t.type==='transfer'?'Перевод':isDividend?'Дивиденды':'Неизвестно';
+  const typeBg    = t.type==='income'?'rgba(110,231,183,0.08)':t.type==='expense'?'rgba(239,68,68,0.08)':isDividend?'rgba(167,139,250,0.08)':'rgba(251,191,36,0.08)';
+  const typeBorder= t.type==='income'?'rgba(110,231,183,0.2)':t.type==='expense'?'rgba(239,68,68,0.2)':isDividend?'rgba(167,139,250,0.2)':'rgba(251,191,36,0.2)';
   const accName = acc ? acc.name : t.account;
   const sub = t.currency!=='RUB' ? `<div style="font-size:11px;color:#555;margin-top:1px">≈${fmt(toRub(t.amount,t.currency))}</div>` : '';
   return `
@@ -1299,7 +1301,7 @@ function txDetailModalHtml(txId) {
     const sign = isIncome ? '+' : '-';
     const amtColor = t.type==='income' ? '#6ee7b7' : t.type==='expense' ? '#f87171' : '#fbbf24';
     const typeLabel = t.type==='income' ? '💚 Доход' : t.type==='expense' ? '🔴 Расход'
-                    : t.type==='transfer' ? '🔄 Перевод' : t.type;
+                    : t.type==='transfer' ? '🔄 Перевод' : t.type==='dividend' ? '÷ Дивиденды' : t.type;
     const amt = parseFloat(t.amount) || 0;
     const cur = t.currency || 'RUB';
     amountBlock = `
@@ -1409,7 +1411,8 @@ function partnerSectionHtml(dirKey, profit) {
           <td style="padding:8px 16px;font-size:13px;color:#aaa">${p.date}</td>
           <td style="padding:8px 16px;font-size:13px;color:${nameColor};font-family:monospace">${fmt(p.amount)}</td>
           <td style="padding:8px 16px;font-size:13px;color:#888">${p.note||'—'}</td>
-          <td style="padding:8px 16px">
+          <td style="padding:8px 16px;display:flex;gap:4px">
+            ${p.txId ? `<button data-partner-edit-pay="${dirKey}" data-partner-id="${partner.id}" data-pay-id="${p.id}" style="padding:2px 7px;border-radius:5px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:#888;cursor:pointer;font-size:11px">⚙</button>` : ''}
             <button data-partner-del="${dirKey}" data-partner-id="${partner.id}" data-pay-id="${p.id}" style="padding:2px 7px;border-radius:5px;border:1px solid rgba(239,68,68,0.3);background:transparent;color:#f87171;cursor:pointer;font-size:11px">✕</button>
           </td>
         </tr>`).join('');
@@ -1464,13 +1467,13 @@ function partnerPayModalHtml({ dirKey, partnerId, partnerName, isOwner }) {
   const dir = DIRECTIONS[dirKey] || {};
   const defaultDate = state.activeMonth ? `${state.activeMonth}-01` : new Date().toISOString().slice(0,10);
 
-  // Accounts for the project direction (expense side)
+  // Accounts for the project direction (debit side)
   const dirAccounts = Object.entries(state.accounts).filter(([,a]) => a.direction === dirKey);
   const fromOptions = dirAccounts.length
     ? dirAccounts.map(([k,a]) => `<option value="${k}">${a.name} (${fmt(a.balance, a.currency)} ${a.currency})</option>`).join('')
     : `<option value="" disabled>Нет счетов для этого направления</option>`;
 
-  // For owner: also pick the destination account (any OTHER direction)
+  // For owner: destination account from any OTHER direction
   const otherAccounts = Object.entries(state.accounts).filter(([,a]) => a.direction !== dirKey);
   const toOptions = otherAccounts.length
     ? otherAccounts.map(([k,a]) => {
@@ -1483,11 +1486,20 @@ function partnerPayModalHtml({ dirKey, partnerId, partnerName, isOwner }) {
   const titleColor = isOwner ? '#ffd700' : '#fff';
   const btnLabel   = isOwner ? '👑 Получить дивиденды' : 'Записать выплату';
 
+  // Owner-only: checkbox + conditional income account
   const ownerFields = isOwner ? `
-    <div>
-      <div class="form-label">Зачислить на счёт (моё направление)</div>
-      <select class="form-inp" id="pp-to-account">${toOptions}</select>
-      <div style="font-size:11px;color:#555;margin-top:4px">Создаст ДОХОД «Дивиденды» в выбранном направлении</div>
+    <div style="padding:12px 0;border-top:1px solid rgba(255,255,255,0.07);border-bottom:1px solid rgba(255,255,255,0.07)">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+        <input type="checkbox" id="pp-create-income" checked style="width:16px;height:16px;margin-top:2px;accent-color:#ffd700;cursor:pointer;flex-shrink:0">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#ffd700">Записать доход в личные финансы</div>
+          <div style="font-size:11px;color:#555;margin-top:2px">Создаст ДОХОД «Дивиденды» на выбранный счёт</div>
+        </div>
+      </label>
+      <div id="pp-income-account-row" style="margin-top:10px">
+        <div class="form-label">Зачислить на счёт (другое направление)</div>
+        <select class="form-inp" id="pp-to-account">${toOptions}</select>
+      </div>
     </div>` : '';
 
   return `
@@ -1652,7 +1664,7 @@ function pnlHtml() {
 
     const incomeMap = {}, expenseMap = {};
     txs.forEach(t => {
-      if (t.isTransfer || t.type === 'transfer') return;
+      if (t.isTransfer || t.type === 'transfer' || t.type === 'dividend') return;
       const rv = toRub(t.amount, t.currency);
       if (t.type === 'income') incomeMap[t.category] = (incomeMap[t.category] || 0) + rv;
       else expenseMap[t.category] = (expenseMap[t.category] || 0) + rv;
@@ -1707,11 +1719,11 @@ function pnlHtml() {
     // monthly
     const byMonth = {};
     txs.forEach(t => {
-      if (t.isTransfer || t.type === 'transfer') return;
+      if (t.isTransfer || t.type === 'transfer' || t.type === 'dividend') return;
       const mk = getMonthKey(t.date);
       if (!byMonth[mk]) byMonth[mk] = { in: 0, out: 0 };
       const rv = toRub(t.amount, t.currency);
-      t.type === 'income' ? (byMonth[mk].in += rv) : (byMonth[mk].out += rv);
+      if (t.type === 'income') byMonth[mk].in += rv; else if (t.type === 'expense') byMonth[mk].out += rv;
     });
     const monthRows = Object.entries(byMonth).sort((a,b)=>a[0].localeCompare(b[0])).map(([mk,mv])=>{
       const net = mv.in - mv.out; const nc = net>=0?'#a78bfa':'#f87171';
@@ -3781,6 +3793,15 @@ function bindEvents() {
   const rb = document.getElementById('rates-bg');
   if (rc) rc.onclick = () => { state.showRates = false; render(); };
   if (rb) rb.onclick = (e) => { if (e.target === rb) { state.showRates = false; render(); } };
+
+  // Owner dividend checkbox — toggle income account row
+  const ppIncomeChk = document.getElementById('pp-create-income');
+  const ppIncomeRow = document.getElementById('pp-income-account-row');
+  if (ppIncomeChk && ppIncomeRow) {
+    ppIncomeChk.onchange = () => {
+      ppIncomeRow.style.display = ppIncomeChk.checked ? 'block' : 'none';
+    };
+  }
   const refreshRatesBtn = document.getElementById('btn-refresh-rates');
   if (refreshRatesBtn) refreshRatesBtn.onclick = async () => {
     refreshRatesBtn.textContent = '⏳ Загружаю...';
@@ -4489,9 +4510,10 @@ function applyTheme() {
         return;
       }
 
-      // For owner — also need a destination account
+      // For owner — check if income checkbox is ticked
+      const createIncome = isOwner && (document.getElementById('pp-create-income')?.checked !== false);
       let toAcc = null;
-      if (isOwner) {
+      if (isOwner && createIncome) {
         toAcc = toAccKey ? state.accounts[toAccKey] : null;
         if (!toAcc) { alert('Укажи счёт для зачисления дивидендов'); return; }
         if (toAcc.direction === dirKey) { alert('Счёт назначения должен быть из другого направления'); return; }
@@ -4510,20 +4532,20 @@ function applyTheme() {
         isOwnerDividend: !!isOwner, toAccount: toAccKey || null,
       });
 
-      // EXPENSE from project account
+      // DIVIDEND transaction — affects balance but NOT P&L
       acc.balance -= amtRaw;
       state.transactions.push({
-        id: txId, date, type: 'expense',
+        id: txId, date, type: 'dividend',
         direction: dirKey, account: accKey,
         amount: amtRaw, currency: acc.currency,
-        category: 'Дивиденды партнёру',
+        category: isOwner ? 'Дивиденды собственника' : 'Дивиденды партнёру',
         note: note || (isOwner ? 'Дивиденды собственника' : 'Выплата: ' + partnerName),
         createdAt: Date.now(), createdAtMs: Date.now(), updatedAtMs: null,
         partnerPayId: ppId, partnerId, partnerDirKey: dirKey,
       });
 
       // INCOME in owner's personal direction — only for owner payout
-      if (isOwner && toAcc) {
+      if (isOwner && createIncome && toAcc) {
         const incomeTxId = 'tr_div_in_' + Date.now();
         toAcc.balance += amtRaw;
         state.transactions.push({
