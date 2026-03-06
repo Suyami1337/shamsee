@@ -47,6 +47,7 @@
   .bg-grid { position: fixed; inset: 0; z-index: 0; pointer-events: none; background-image: linear-gradient(rgba(255,255,255,0.01) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.01) 1px, transparent 1px); background-size: 48px 48px; }
 
   /* ── TOP BAR ── */
+  /* ── TOP BAR: icon | title | icon ── */
   .m-topbar {
     position: fixed; top: 0; left: 0; right: 0; z-index: 100;
     height: var(--top-h);
@@ -55,30 +56,24 @@
     backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid var(--border);
     display: flex; align-items: center; justify-content: space-between;
-    padding-left: 14px; padding-right: 14px; gap: 10px;
+    padding-left: 16px; padding-right: 16px;
   }
-  .m-topbar-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
-  .m-topbar-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-
-  .m-project-btn {
-    display: flex; align-items: center; gap: 6px;
+  .m-topbar-icon-btn {
+    width: 38px; height: 38px; border-radius: 11px;
     background: rgba(255,255,255,0.05); border: 1px solid var(--border);
-    border-radius: 10px; padding: 6px 10px;
-    color: #ccc; font-size: 13px; font-weight: 700; cursor: pointer;
-    max-width: 160px; overflow: hidden; white-space: nowrap;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; cursor: pointer; flex-shrink: 0;
+    color: #aaa;
   }
-  .m-project-btn span { overflow: hidden; text-overflow: ellipsis; }
-  .m-project-btn .arrow { color: var(--dim); font-size: 10px; flex-shrink: 0; }
-
-  .m-period-btn {
-    display: flex; align-items: center; gap: 5px;
-    background: rgba(255,255,255,0.05); border: 1px solid var(--border);
-    border-radius: 9px; padding: 6px 10px;
-    color: #bbb; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  .m-topbar-title {
+    flex: 1; text-align: center;
+    font-size: 17px; font-weight: 800; letter-spacing: -0.02em;
+    color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    padding: 0 10px;
   }
-  .m-period-btn.active { background: rgba(167,139,250,0.12); border-color: rgba(167,139,250,0.4); color: var(--purple); }
+  .m-topbar-title .m-topbar-emoji { margin-right: 6px; }
 
-  /* ── TAB BAR (sticky under topbar) ── */
+  /* ── TAB BAR: horizontal scroll pills ── */
   .m-tabbar {
     position: fixed;
     top: var(--top-h);
@@ -87,17 +82,27 @@
     background: rgba(8,8,8,0.94);
     backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
     border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; gap: 4px;
-    padding: 6px 10px;
+    display: flex; align-items: center;
+    overflow-x: auto; overflow-y: hidden;
+    padding: 0 14px; gap: 6px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
   }
+  .m-tabbar::-webkit-scrollbar { display: none; }
   .m-tab {
-    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
-    padding: 7px 4px; border-radius: 10px;
-    background: transparent; border: none;
-    color: var(--dim); font-size: 10px; font-weight: 500; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: 50px;
+    background: transparent; border: 1px solid transparent;
+    color: var(--dim); font-size: 14px; font-weight: 600;
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
     transition: all 0.15s;
   }
-  .m-tab .m-tab-icon { font-size: 17px; line-height: 1; }
+  .m-tab .m-tab-icon { font-size: 15px; line-height: 1; }
+  .m-tab.active {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.18);
+    color: #fff;
+  }
   .m-tab.active {
     background: linear-gradient(135deg, rgba(110,231,183,0.15), rgba(59,130,246,0.15));
     border: 1px solid rgba(110,231,183,0.2);
@@ -363,6 +368,126 @@
   <div class="m-loading"><div style="font-size:42px;animation:spin 2s linear infinite">⚙️</div><div style="font-size:14px;color:#555">Загрузка...</div></div>
 </div></div>
 <div id="bot-root"></div>
+
+
+<script>
+
+// ══════════════════════════════════════════════════════
+//  MOBILE OVERRIDES — replace desktop render functions
+// ══════════════════════════════════════════════════════
+
+function headerHtml() {
+  return '<div class="m-topbar">'
+    + '<button class="m-topbar-icon-btn" id="btn-settings-header">⚙️</button>'
+    + '<div class="m-topbar-title" id="btn-open-project-switcher" style="cursor:pointer">'
+    + '<span class="m-topbar-emoji">' + _projectEmoji + '</span>'
+    + (_projectName || 'MyFinanceAI')
+    + '</div>'
+    + '<button class="m-topbar-icon-btn" id="btn-profile-dash">👤</button>'
+    + '</div>';
+}
+
+function tabsHtml() {
+  const tabs = [
+    ['overview',     '📊', 'Обзор'],
+    ['transactions', '💳', 'Операции'],
+    ['pnl',          '📂', 'Детализация'],
+    ['analytics',    '📈', 'Аналитика'],
+  ];
+  return '<div class="m-tabbar" id="m-tabbar">'
+    + tabs.map(([k, emoji, label]) =>
+        '<button class="m-tab ' + (state.tab === k ? 'active' : '') + '" data-tab="' + k + '">'
+        + '<span class="m-tab-icon">' + emoji + '</span>'
+        + label
+        + '</button>'
+      ).join('')
+    + '</div>';
+}
+
+function statsHtml() {
+  const tab = state.tab || 'overview';
+  let bal, txIn, txOut;
+  const mtxs = monthTxs();
+  txIn  = mtxs.filter(t=>t.type==='income').reduce((s,t)=>s+toRub(t.amount,t.currency),0);
+  txOut = mtxs.filter(t=>t.type==='expense').reduce((s,t)=>s+toRub(t.amount,t.currency),0);
+
+  if (tab === 'transactions' && state.activeAccount) {
+    const a = state.accounts[state.activeAccount];
+    bal = a ? toRub(a.balance, a.currency) : 0;
+  } else {
+    bal = Object.values(state.accounts).reduce((s,a)=>s+toRub(a.balance,a.currency),0);
+  }
+  const profit = txIn - txOut;
+  const balC = bal >= 0 ? '#a78bfa' : '#f87171';
+  const pc   = profit >= 0 ? '#a78bfa' : '#f87171';
+
+  return '<div class="m-stats">'
+    + '<div class="m-stat"><div class="m-stat-icon">💼</div><div class="m-stat-label">Баланс</div><div class="m-stat-val" style="color:' + balC + '">' + fmt(bal) + '</div></div>'
+    + '<div class="m-stat"><div class="m-stat-icon">✨</div><div class="m-stat-label">Прибыль</div><div class="m-stat-val" style="color:' + pc + '">' + fmt(profit) + '</div></div>'
+    + '<div class="m-stat"><div class="m-stat-icon">📈</div><div class="m-stat-label">Доходы</div><div class="m-stat-val" style="color:#6ee7b7">' + fmt(txIn) + '</div></div>'
+    + '<div class="m-stat"><div class="m-stat-icon">📉</div><div class="m-stat-label">Расходы</div><div class="m-stat-val" style="color:#f87171">' + fmt(txOut) + '</div></div>'
+    + '</div>';
+}
+
+function ratesBarHtml() {
+  const upd = state.rates.updatedAt
+    ? 'обновлено ' + new Date(state.rates.updatedAt).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})
+    : (state.rates.source === 'fallback' ? '⚠️ резервный' : '');
+  return '<div class="m-rates">'
+    + '<span>SAR = <strong>' + (state.rates.SAR||0).toFixed(2) + ' ₽</strong></span>'
+    + '<span>USDT = <strong class="usdt">' + (state.rates.USDT||0).toFixed(2) + ' ₽</strong></span>'
+    + '<span>USD = <strong style="color:#60a5fa">' + (state.rates.USD||0).toFixed(2) + ' ₽</strong></span>'
+    + '<span style="margin-left:auto;color:#444;font-size:11px;white-space:nowrap">' + upd + '</span>'
+    + '</div>';
+}
+
+// Bottom bar HTML — injected into page structure
+function bottomBarHtml() {
+  const addMenu = state.showAddMenu
+    ? '<div style="position:fixed;bottom:calc(var(--bot-h) + 10px);left:50%;transform:translateX(-50%);z-index:200;background:rgba(16,16,28,0.98);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:8px;min-width:220px;box-shadow:0 -8px 40px rgba(0,0,0,0.6)">'
+      + '<button id="btn-add-manual" style="width:100%;padding:14px 18px;border-radius:13px;border:none;background:rgba(255,255,255,0.05);color:#fff;font-size:14px;font-weight:600;cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px;margin-bottom:6px">✏️ <span>Вручную</span></button>'
+      + '<button id="btn-add-ai" style="width:100%;padding:14px 18px;border-radius:13px;border:none;background:rgba(167,139,250,0.1);color:#a78bfa;font-size:14px;font-weight:600;cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px">✨ <span>Через AI</span></button>'
+      + '</div>'
+      + '<div id="add-menu-overlay" style="position:fixed;inset:0;z-index:199;background:rgba(0,0,0,0.4)" onclick="state.showAddMenu=false;render()"></div>'
+    : '';
+  return addMenu
+    + '<div class="m-bottombar">'
+    + '<button class="m-bot-btn" id="btn-period-open"><span class="m-bot-icon">📅</span><span>' + activePeriodLabel() + '</span></button>'
+    + '<div class="m-bot-add" id="btn-add-plus"><div class="m-bot-add-circle">+</div><span class="m-bot-add-label">Добавить</span></div>'
+    + '<button class="m-bot-btn" id="btn-open-project-switcher-bot"><span class="m-bot-icon">' + _projectEmoji + '</span><span>Проект</span></button>'
+    + '</div>';
+}
+
+// Patch render() to use mobile structure
+const _origRender = render;
+function render() {
+  try {
+    document.getElementById('header-root').innerHTML = headerHtml();
+    document.getElementById('tabs-root').innerHTML   = tabsHtml();
+    document.getElementById('app').innerHTML =
+        statsHtml()
+      + contentHtml()
+      + (state.showModal         ? modalHtml()                              : '')
+      + (state.showModePicker    ? modePickerHtml()                        : '')
+      + (state.showAiChat        ? aiChatHtml()                            : '')
+      + (state.showRates         ? ratesModalHtml()                        : '')
+      + (state.showSettingsModal ? settingsModalHtml()                     : '')
+      + (state.showPeriodModal       ? periodModalHtml()                   : '')
+      + (state.showProjectSwitcher   ? projectSwitcherHtml()               : '')
+      + (state.showProfileModal  ? profileModalHtml()                      : '')
+      + (state.showEditTxModal   ? editTxModalHtml(state.showEditTxModal)  : '')
+      + (state.showTxDetail      ? txDetailModalHtml(state.showTxDetail)   : '')
+      + (state.showExportModal   ? exportModalHtml()                       : '');
+    document.getElementById('bot-root').innerHTML = bottomBarHtml();
+    bindEvents();
+    renderCharts();
+  } catch(e) {
+    console.error('RENDER ERROR:', e);
+    document.getElementById('app').innerHTML = '<div style="color:red;padding:20px;font-size:13px">Ошибка: ' + e.message + '</div>';
+  }
+}
+
+</script>
 
 <script>
 // ── Supabase init ─────────────────────────────────
@@ -3924,6 +4049,14 @@ function confirmAiTxs() {
 
 // ─── BIND EVENTS ───────────────────────────────────────────────────────────
 function bindEvents() {
+  // Auto-scroll active tab into view
+  const activeTab = document.querySelector('.m-tab.active');
+  if (activeTab) activeTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+
+  // Bottom project btn
+  const btnProjBot = document.getElementById('btn-open-project-switcher-bot');
+  if (btnProjBot) btnProjBot.onclick = () => { state.showProjectSwitcher = true; render(); };
+
   // + button opens add menu
   const btnAddPlus = document.getElementById('btn-add-plus');
   if (btnAddPlus) btnAddPlus.onclick = (e) => {
@@ -6731,130 +6864,5 @@ function doExportPdf() {
 }
 </script>
 
-<script>
-
-// ══════════════════════════════════════════════════════
-//  MOBILE OVERRIDES — replace desktop render functions
-// ══════════════════════════════════════════════════════
-
-function headerHtml() {
-  const periodActive = !!state.activePeriod;
-  const am = state.activeMonth || '';
-  const [yr, mo] = am ? am.split('-') : ['', ''];
-  const monthShort = mo ? MONTHS[parseInt(mo)-1].slice(0,3) + ' ' + yr : '';
-  const periodLabel = periodActive ? activePeriodLabel() : (monthShort || 'Период');
-  return '<div class="m-topbar">'
-    + '<button class="m-project-btn" id="btn-open-project-switcher">'
-    + '<span>' + _projectEmoji + '</span>'
-    + '<span>' + (_projectName || 'MyFinanceAI') + '</span>'
-    + '<span class="arrow">▾</span>'
-    + '</button>'
-    + '<button class="m-period-btn' + (periodActive ? ' active' : '') + '" id="btn-period-open">'
-    + '📅 ' + periodLabel
-    + '</button>'
-    + '</div>';
-}
-
-function tabsHtml() {
-  const tabs = [
-    ['overview',     '📊', 'Обзор'],
-    ['transactions', '💳', 'Операции'],
-    ['pnl',          '📂', 'Детализация'],
-    ['analytics',    '📈', 'Аналитика'],
-  ];
-  return '<div class="m-tabbar">'
-    + tabs.map(([k, emoji, label]) =>
-        '<button class="m-tab ' + (state.tab === k ? 'active' : '') + '" data-tab="' + k + '">'
-        + '<span class="m-tab-icon">' + emoji + '</span>'
-        + '<span>' + label + '</span>'
-        + '</button>'
-      ).join('')
-    + '</div>';
-}
-
-function statsHtml() {
-  const tab = state.tab || 'overview';
-  let bal, txIn, txOut;
-  const mtxs = monthTxs();
-  txIn  = mtxs.filter(t=>t.type==='income').reduce((s,t)=>s+toRub(t.amount,t.currency),0);
-  txOut = mtxs.filter(t=>t.type==='expense').reduce((s,t)=>s+toRub(t.amount,t.currency),0);
-
-  if (tab === 'transactions' && state.activeAccount) {
-    const a = state.accounts[state.activeAccount];
-    bal = a ? toRub(a.balance, a.currency) : 0;
-  } else {
-    bal = Object.values(state.accounts).reduce((s,a)=>s+toRub(a.balance,a.currency),0);
-  }
-  const profit = txIn - txOut;
-  const balC = bal >= 0 ? '#a78bfa' : '#f87171';
-  const pc   = profit >= 0 ? '#a78bfa' : '#f87171';
-
-  return '<div class="m-stats">'
-    + '<div class="m-stat"><div class="m-stat-icon">💼</div><div class="m-stat-label">Баланс</div><div class="m-stat-val" style="color:' + balC + '">' + fmt(bal) + '</div></div>'
-    + '<div class="m-stat"><div class="m-stat-icon">✨</div><div class="m-stat-label">Прибыль</div><div class="m-stat-val" style="color:' + pc + '">' + fmt(profit) + '</div></div>'
-    + '<div class="m-stat"><div class="m-stat-icon">📈</div><div class="m-stat-label">Доходы</div><div class="m-stat-val" style="color:#6ee7b7">' + fmt(txIn) + '</div></div>'
-    + '<div class="m-stat"><div class="m-stat-icon">📉</div><div class="m-stat-label">Расходы</div><div class="m-stat-val" style="color:#f87171">' + fmt(txOut) + '</div></div>'
-    + '</div>';
-}
-
-function ratesBarHtml() {
-  const upd = state.rates.updatedAt
-    ? 'обновлено ' + new Date(state.rates.updatedAt).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})
-    : (state.rates.source === 'fallback' ? '⚠️ резервный' : '');
-  return '<div class="m-rates">'
-    + '<span>SAR = <strong>' + (state.rates.SAR||0).toFixed(2) + ' ₽</strong></span>'
-    + '<span>USDT = <strong class="usdt">' + (state.rates.USDT||0).toFixed(2) + ' ₽</strong></span>'
-    + '<span>USD = <strong style="color:#60a5fa">' + (state.rates.USD||0).toFixed(2) + ' ₽</strong></span>'
-    + '<span style="margin-left:auto;color:#444;font-size:11px;white-space:nowrap">' + upd + '</span>'
-    + '</div>';
-}
-
-// Bottom bar HTML — injected into page structure
-function bottomBarHtml() {
-  const addMenu = state.showAddMenu
-    ? '<div style="position:fixed;bottom:calc(var(--bot-h) + 10px);left:50%;transform:translateX(-50%);z-index:200;background:rgba(16,16,28,0.98);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:8px;min-width:220px;box-shadow:0 -8px 40px rgba(0,0,0,0.6)">'
-      + '<button id="btn-add-manual" style="width:100%;padding:14px 18px;border-radius:13px;border:none;background:rgba(255,255,255,0.05);color:#fff;font-size:14px;font-weight:600;cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px;margin-bottom:6px">✏️ <span>Вручную</span></button>'
-      + '<button id="btn-add-ai" style="width:100%;padding:14px 18px;border-radius:13px;border:none;background:rgba(167,139,250,0.1);color:#a78bfa;font-size:14px;font-weight:600;cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px">✨ <span>Через AI</span></button>'
-      + '</div>'
-      + '<div id="add-menu-overlay" style="position:fixed;inset:0;z-index:199;background:rgba(0,0,0,0.4)" onclick="state.showAddMenu=false;render()"></div>'
-    : '';
-  return addMenu
-    + '<div class="m-bottombar">'
-    + '<button class="m-bot-btn" id="btn-profile-dash"><span class="m-bot-icon">👤</span><span>Профиль</span></button>'
-    + '<div class="m-bot-add" id="btn-add-plus"><div class="m-bot-add-circle">+</div><span class="m-bot-add-label">Добавить</span></div>'
-    + '<button class="m-bot-btn" id="btn-settings-header"><span class="m-bot-icon">⚙️</span><span>Настройки</span></button>'
-    + '</div>';
-}
-
-// Patch render() to use mobile structure
-const _origRender = render;
-function render() {
-  try {
-    document.getElementById('header-root').innerHTML = headerHtml();
-    document.getElementById('tabs-root').innerHTML   = tabsHtml();
-    document.getElementById('app').innerHTML =
-        statsHtml()
-      + contentHtml()
-      + (state.showModal         ? modalHtml()                              : '')
-      + (state.showModePicker    ? modePickerHtml()                        : '')
-      + (state.showAiChat        ? aiChatHtml()                            : '')
-      + (state.showRates         ? ratesModalHtml()                        : '')
-      + (state.showSettingsModal ? settingsModalHtml()                     : '')
-      + (state.showPeriodModal       ? periodModalHtml()                   : '')
-      + (state.showProjectSwitcher   ? projectSwitcherHtml()               : '')
-      + (state.showProfileModal  ? profileModalHtml()                      : '')
-      + (state.showEditTxModal   ? editTxModalHtml(state.showEditTxModal)  : '')
-      + (state.showTxDetail      ? txDetailModalHtml(state.showTxDetail)   : '')
-      + (state.showExportModal   ? exportModalHtml()                       : '');
-    document.getElementById('bot-root').innerHTML = bottomBarHtml();
-    bindEvents();
-    renderCharts();
-  } catch(e) {
-    console.error('RENDER ERROR:', e);
-    document.getElementById('app').innerHTML = '<div style="color:red;padding:20px;font-size:13px">Ошибка: ' + e.message + '</div>';
-  }
-}
-
-</script>
 </body>
 </html>
