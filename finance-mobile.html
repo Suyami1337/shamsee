@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MyFinanceAI</title>
+<title>MyFinanceAI — Mobile</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -306,9 +306,12 @@
   .tab-content { animation: fadeSlide 0.18s ease; }
   @keyframes fadeSlide { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
 </style>
+</head>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
+<body>
 
 <div class="bg-orbs">
   <div class="orb orb-1"></div>
@@ -316,53 +319,49 @@
   <div class="orb orb-3"></div>
 </div>
 <div class="bg-grid"></div>
-<body>
+
 <div id="header-root"></div>
 <div id="tabs-root"></div>
-<div class="content"><div class="content-inner" id="app">
-  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:40vh;gap:14px">
-    <div style="font-size:42px;animation:spin 2s linear infinite">⚙️</div>
-    <div style="font-size:14px;color:#555">Загрузка...</div>
+<div class="content">
+  <div class="content-inner" id="app">
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50vh;gap:14px">
+      <div style="font-size:42px;animation:spin 2s linear infinite">⚙️</div>
+      <div style="font-size:14px;color:#555">Загрузка...</div>
+    </div>
   </div>
-</div></div>
+</div>
 <div id="bot-root"></div>
+<style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
 
 <script>
 // ══════════════════════════════════════════════════════
-//  MOBILE OVERRIDES — mockup design + real functionality
+//  MOBILE OVERRIDES — mockup design + real data
 // ══════════════════════════════════════════════════════
 
 function headerHtml() {
   const periodActive = !!state.activePeriod;
   const am = state.activeMonth || '';
-  const [yr, mo] = am ? am.split('-') : ['', ''];
-  const monthShort = mo ? MONTHS[parseInt(mo)-1] + ' ' + yr : 'Период';
-  const periodLabel = periodActive ? activePeriodLabel() : monthShort;
+  const [yr, mo] = am ? am.split('-') : ['',''];
+  const monthLabel = mo ? MONTHS[parseInt(mo)-1] + ' ' + yr : 'Период';
+  const periodLabel = periodActive ? activePeriodLabel() : monthLabel;
   return '<div class="topbar">'
     + '<button class="top-project" id="btn-open-project-switcher">'
-    + '<span class="top-project-emoji">' + _projectEmoji + '</span>'
-    + '<span class="top-project-name">' + (_projectName || 'MyFinanceAI') + '</span>'
-    + '<span class="top-project-arrow">▾</span>'
+    +   '<span class="top-project-emoji">' + _projectEmoji + '</span>'
+    +   '<span class="top-project-name">' + (_projectName || 'MyFinanceAI') + '</span>'
+    +   '<span class="top-project-arrow">▾</span>'
     + '</button>'
     + '<button class="top-period' + (periodActive ? ' active' : '') + '" id="btn-period-open">'
-    + '📅 ' + periodLabel
+    +   '📅 ' + periodLabel
     + '</button>'
     + '</div>';
 }
 
 function tabsHtml() {
-  const tabs = [
-    ['overview',     '📊', 'Обзор'],
-    ['transactions', '💳', 'Операции'],
-    ['pnl',          '📂', 'Детализация'],
-    ['analytics',    '📈', 'Аналитика'],
-  ];
+  const tabs = [['overview','📊','Обзор'],['transactions','💳','Операции'],['pnl','📂','Детализация'],['analytics','📈','Аналитика']];
   return '<div class="tabbar">'
-    + tabs.map(([k, emoji, label]) =>
-        '<button class="tab ' + (state.tab === k ? 'active' : '') + '" data-tab="' + k + '">'
-        + '<span class="tab-icon">' + emoji + '</span>'
-        + '<span>' + label + '</span>'
-        + '</button>'
+    + tabs.map(([k,emoji,label]) =>
+        '<button class="tab ' + (state.tab===k?'active':'') + '" data-tab="' + k + '">'
+        + '<span class="tab-icon">' + emoji + '</span><span>' + label + '</span></button>'
       ).join('')
     + '</div>';
 }
@@ -373,43 +372,45 @@ function statsHtml() {
   const txOut = mtxs.filter(t=>t.type==='expense').reduce((s,t)=>s+toRub(t.amount,t.currency),0);
   const bal   = Object.values(state.accounts).reduce((s,a)=>s+toRub(a.balance,a.currency),0);
   const profit = txIn - txOut;
-  const balC = bal >= 0 ? '#a78bfa' : '#f87171';
-  const pc   = profit >= 0 ? '#a78bfa' : '#f87171';
+  const balC = bal>=0?'#a78bfa':'#f87171';
+  const pc   = profit>=0?'#a78bfa':'#f87171';
   return '<div class="stats">'
-    + '<div class="stat-card"><div class="stat-card-bg">💼</div><div class="stat-label">Баланс</div><div class="stat-val" style="color:' + balC + '">' + fmt(bal) + '</div></div>'
-    + '<div class="stat-card"><div class="stat-card-bg">✨</div><div class="stat-label">Прибыль</div><div class="stat-val" style="color:' + pc + '">' + fmt(profit) + '</div></div>'
-    + '<div class="stat-card"><div class="stat-card-bg">📈</div><div class="stat-label">Доходы</div><div class="stat-val" style="color:#6ee7b7">' + fmt(txIn) + '</div></div>'
-    + '<div class="stat-card"><div class="stat-card-bg">📉</div><div class="stat-label">Расходы</div><div class="stat-val" style="color:#f87171">' + fmt(txOut) + '</div></div>'
+    + '<div class="stat-card"><div class="stat-card-bg">💼</div><div class="stat-label">Баланс</div><div class="stat-val" style="color:'+balC+'">'+fmt(bal)+'</div></div>'
+    + '<div class="stat-card"><div class="stat-card-bg">✨</div><div class="stat-label">Прибыль</div><div class="stat-val" style="color:'+pc+'">'+fmt(profit)+'</div></div>'
+    + '<div class="stat-card"><div class="stat-card-bg">📈</div><div class="stat-label">Доходы</div><div class="stat-val" style="color:#6ee7b7">'+fmt(txIn)+'</div></div>'
+    + '<div class="stat-card"><div class="stat-card-bg">📉</div><div class="stat-label">Расходы</div><div class="stat-val" style="color:#f87171">'+fmt(txOut)+'</div></div>'
     + '</div>';
 }
 
 function ratesBarHtml() {
   const upd = state.rates.updatedAt
-    ? 'обновлено ' + new Date(state.rates.updatedAt).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})
-    : (state.rates.source === 'fallback' ? '⚠️ резервный' : '');
+    ? new Date(state.rates.updatedAt).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})
+    : '';
   return '<div class="rates-strip">'
-    + '<div class="rate-chip">SAR = <strong>' + (state.rates.SAR||0).toFixed(2) + ' ₽</strong></div>'
-    + '<div class="rate-chip">USDT = <strong class="usdt">' + (state.rates.USDT||0).toFixed(2) + ' ₽</strong></div>'
-    + '<div class="rate-chip">USD = <strong style="color:#60a5fa">' + (state.rates.USD||0).toFixed(2) + ' ₽</strong></div>'
-    + (upd ? '<div class="rate-chip" style="color:#444;font-size:11px">' + upd + '</div>' : '')
+    + '<div class="rate-chip">SAR = <strong>'+(state.rates.SAR||0).toFixed(2)+' ₽</strong></div>'
+    + '<div class="rate-chip">USDT = <strong class="usdt">'+(state.rates.USDT||0).toFixed(2)+' ₽</strong></div>'
+    + '<div class="rate-chip">USD = <strong style="color:#60a5fa">'+(state.rates.USD||0).toFixed(2)+' ₽</strong></div>'
+    + (upd ? '<div class="rate-chip" style="color:#555;font-size:11px">'+upd+'</div>' : '')
     + '</div>';
 }
 
 function bottomBarHtml() {
+  const ringClass = 'bot-add-ring' + (state.showAddMenu ? ' open' : '');
   const addMenu = state.showAddMenu
-    ? '<div class="add-menu-overlay" id="add-overlay-real" onclick="state.showAddMenu=false;render()"></div>'
-      + '<div class="add-menu" style="animation:popUp 0.18s ease">'
+    ? '<div class="add-menu-overlay" onclick="state.showAddMenu=false;render()"></div>'
+      + '<div class="add-menu">'
       + '<button class="add-menu-item" id="btn-add-manual">'
-      + '<div class="add-menu-item-icon ami-manual">✏️</div>'
-      + '<div><strong style="display:block;font-size:14px;font-weight:700;color:#fff">Вручную</strong><span style="font-size:11px;color:#666">Ввести операцию</span></div>'
+      +   '<div class="add-menu-item-icon ami-manual">✏️</div>'
+      +   '<div><strong style="display:block;font-size:14px;font-weight:700;color:#fff">Вручную</strong>'
+      +   '<span style="font-size:11px;color:#666">Ввести операцию</span></div>'
       + '</button>'
       + '<button class="add-menu-item ai-item" id="btn-add-ai">'
-      + '<div class="add-menu-item-icon ami-ai">✨</div>'
-      + '<div><strong style="display:block;font-size:14px;font-weight:700;color:#a78bfa">Через AI</strong><span style="font-size:11px;color:#555">Голос или текст</span></div>'
+      +   '<div class="add-menu-item-icon ami-ai">✨</div>'
+      +   '<div><strong style="display:block;font-size:14px;font-weight:700;color:#a78bfa">Через AI</strong>'
+      +   '<span style="font-size:11px;color:#555">Голос или текст</span></div>'
       + '</button>'
       + '</div>'
     : '';
-  const ringClass = state.showAddMenu ? 'bot-add-ring open' : 'bot-add-ring';
   return addMenu
     + '<div class="botbar">'
     + '<button class="bot-btn" id="btn-profile-dash"><span class="bot-btn-icon">👤</span><span>Профиль</span></button>'
@@ -427,23 +428,35 @@ function render() {
       + statsHtml()
       + contentHtml()
       + (state.showModal         ? modalHtml()                             : '')
-      + (state.showModePicker    ? modePickerHtml()                       : '')
-      + (state.showAiChat        ? aiChatHtml()                           : '')
-      + (state.showRates         ? ratesModalHtml()                       : '')
-      + (state.showSettingsModal ? settingsModalHtml()                    : '')
-      + (state.showPeriodModal       ? periodModalHtml()                  : '')
-      + (state.showProjectSwitcher   ? projectSwitcherHtml()              : '')
-      + (state.showProfileModal  ? profileModalHtml()                     : '')
-      + (state.showEditTxModal   ? editTxModalHtml(state.showEditTxModal) : '')
-      + (state.showTxDetail      ? txDetailModalHtml(state.showTxDetail)  : '')
-      + (state.showExportModal   ? exportModalHtml()                      : '');
+      + (state.showModePicker    ? modePickerHtml()                        : '')
+      + (state.showAiChat        ? aiChatHtml()                            : '')
+      + (state.showRates         ? ratesModalHtml()                        : '')
+      + (state.showSettingsModal ? settingsModalHtml()                     : '')
+      + (state.showPeriodModal       ? periodModalHtml()                   : '')
+      + (state.showProjectSwitcher   ? projectSwitcherHtml()               : '')
+      + (state.showProfileModal  ? profileModalHtml()                      : '')
+      + (state.showEditTxModal   ? editTxModalHtml(state.showEditTxModal)  : '')
+      + (state.showTxDetail      ? txDetailModalHtml(state.showTxDetail)   : '')
+      + (state.showExportModal   ? exportModalHtml()                       : '');
     document.getElementById('bot-root').innerHTML = bottomBarHtml();
     bindEvents();
     renderCharts();
   } catch(e) {
     console.error('RENDER ERROR:', e);
-    document.getElementById('app').innerHTML = '<div style="color:red;padding:20px;font-size:13px">Ошибка: ' + e.message + '</div>';
+    document.getElementById('app').innerHTML = '<div style="color:#f87171;padding:20px;font-size:13px;font-family:monospace">Ошибка: ' + e.message + '</div>';
   }
+}
+
+// bindEvents additions for mobile buttons
+const _origBindEvents = bindEvents;
+function bindEvents() {
+  _origBindEvents();
+  const btnAddPlus = document.getElementById('btn-add-plus');
+  if (btnAddPlus) btnAddPlus.onclick = (e) => { e.stopPropagation(); state.showAddMenu = !state.showAddMenu; render(); };
+  const btnAddManual = document.getElementById('btn-add-manual');
+  if (btnAddManual) btnAddManual.onclick = () => { state.showAddMenu=false; state.showModePicker=true; render(); };
+  const btnAddAi = document.getElementById('btn-add-ai');
+  if (btnAddAi) btnAddAi.onclick = () => { state.showAddMenu=false; state.showAiChat=true; render(); };
 }
 </script>
 
@@ -4036,13 +4049,6 @@ function bindEvents() {
     state.showAiChat = true;
     render();
   };
-  // Mobile menu tab close
-  const btnMobileMenu = document.getElementById('btn-mobile-menu');
-  if (btnMobileMenu) btnMobileMenu.onclick = (e) => {
-    e.stopPropagation();
-    state.showMobileMenu = !state.showMobileMenu;
-    render();
-  };
 
   // header buttons
   const btnRates = document.getElementById('btn-rates');
@@ -6828,6 +6834,5 @@ function doExportPdf() {
   setTimeout(() => win.print(), 500);
 }
 </script>
-
 </body>
 </html>
