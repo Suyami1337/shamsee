@@ -30,7 +30,7 @@
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrYWl4d21xY2xzdWRhYmdvZmNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1MDc4ODcsImV4cCI6MjA4ODA4Mzg4N30.zD9M-Tthd_FBdcrXuOukEdxuWnIaR0yWfm0CnWyuhb0"
     );
     await sb.auth.getSession();
-    window.location.href = "projects.html";
+    window.location.href = "onboarding";
     return;
   }
 
@@ -43,7 +43,7 @@
     );
     await sb.auth.exchangeCodeForSession(code);
     const type = params.get("type");
-    window.location.href = type === "recovery" ? "reset-password.html" : "projects.html";
+    window.location.href = type === "recovery" ? "reset-password.html" : "onboarding";
     return;
   }
 
