@@ -347,154 +347,6 @@
   <button class="bot-btn" id="btn-settings"><span class="bot-btn-icon">⚙️</span><span>Настройки</span></button>
 </div>
 
-<script>
-// ═══════════════════════════════════════════════════════════════
-//  MOBILE ADAPTER — bridges finance.html logic to mockup design
-// ═══════════════════════════════════════════════════════════════
-
-// ── Patch render() to update mockup's static DOM ──────────────
-function render() {
-  try {
-    // 1. Update topbar
-    _updateTopbar();
-    // 2. Update tab active states  
-    _updateTabs();
-    // 3. Render content into #content-root
-    document.getElementById('content-root').innerHTML =
-        _ratesHtml()
-      + statsHtml()
-      + contentHtml()
-      + (state.showModal         ? modalHtml()                             : '')
-      + (state.showModePicker    ? modePickerHtml()                        : '')
-      + (state.showAiChat        ? aiChatHtml()                            : '')
-      + (state.showRates         ? ratesModalHtml()                        : '')
-      + (state.showSettingsModal ? settingsModalHtml()                     : '')
-      + (state.showPeriodModal       ? periodModalHtml()                   : '')
-      + (state.showProjectSwitcher   ? projectSwitcherHtml()               : '')
-      + (state.showProfileModal  ? profileModalHtml()                      : '')
-      + (state.showEditTxModal   ? editTxModalHtml(state.showEditTxModal)  : '')
-      + (state.showTxDetail      ? txDetailModalHtml(state.showTxDetail)   : '')
-      + (state.showExportModal   ? exportModalHtml()                       : '')
-      + _addMenuHtml();
-    // 4. Bind all events
-    bindEvents();
-    _bindMobileEvents();
-    renderCharts();
-  } catch(e) {
-    console.error('RENDER ERROR:', e);
-    document.getElementById('content-root').innerHTML =
-      '<div style="color:#f87171;padding:20px;font-size:13px;font-family:monospace">Ошибка: ' + e.message + '</div>';
-  }
-}
-
-function _updateTopbar() {
-  const am = state.activeMonth || '';
-  const [yr, mo] = am ? am.split('-') : ['',''];
-  const monthLabel = mo ? MONTHS[parseInt(mo)-1] + ' ' + yr : 'Период';
-  const periodLabel = state.activePeriod ? activePeriodLabel() : monthLabel;
-  const periodActive = !!state.activePeriod;
-
-  const nameEl = document.getElementById('m-project-name');
-  const emojiEl = document.getElementById('m-project-emoji');
-  const periodEl = document.getElementById('m-period-btn');
-  if (nameEl)  nameEl.textContent = _projectName || 'MyFinanceAI';
-  if (emojiEl) emojiEl.textContent = _projectEmoji || '💼';
-  if (periodEl) {
-    periodEl.textContent = '📅 ' + periodLabel;
-    periodEl.classList.toggle('active', periodActive);
-  }
-}
-
-function _updateTabs() {
-  document.querySelectorAll('.tab').forEach(t => {
-    t.classList.toggle('active', t.dataset.tab === state.tab);
-  });
-}
-
-function _ratesHtml() {
-  const upd = state.rates.updatedAt
-    ? new Date(state.rates.updatedAt).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})
-    : '';
-  return '<div class="rates-strip">'
-    + '<div class="rate-chip">SAR = <strong>' + (state.rates.SAR||0).toFixed(2) + ' ₽</strong></div>'
-    + '<div class="rate-chip">USDT = <strong class="usdt">' + (state.rates.USDT||0).toFixed(2) + ' ₽</strong></div>'
-    + '<div class="rate-chip">USD = <strong style="color:#60a5fa">' + (state.rates.USD||0).toFixed(2) + ' ₽</strong></div>'
-    + (upd ? '<div class="rate-chip" style="color:#555;font-size:11px">' + upd + '</div>' : '')
-    + '</div>';
-}
-
-function statsHtml() {
-  const mtxs = monthTxs();
-  const txIn  = mtxs.filter(t=>t.type==='income').reduce((s,t)=>s+toRub(t.amount,t.currency),0);
-  const txOut = mtxs.filter(t=>t.type==='expense').reduce((s,t)=>s+toRub(t.amount,t.currency),0);
-  const bal   = Object.values(state.accounts).reduce((s,a)=>s+toRub(a.balance,a.currency),0);
-  const profit = txIn - txOut;
-  const balC = bal>=0?'#a78bfa':'#f87171';
-  const pc   = profit>=0?'#a78bfa':'#f87171';
-  return '<div class="stats">'
-    + '<div class="stat-card"><div class="stat-card-bg">💼</div><div class="stat-label">Баланс</div><div class="stat-val" style="color:' + balC + '">' + fmt(bal) + '</div></div>'
-    + '<div class="stat-card"><div class="stat-card-bg">✨</div><div class="stat-label">Прибыль</div><div class="stat-val" style="color:' + pc + '">' + fmt(profit) + '</div></div>'
-    + '<div class="stat-card"><div class="stat-card-bg">📈</div><div class="stat-label">Доходы</div><div class="stat-val" style="color:#6ee7b7">' + fmt(txIn) + '</div></div>'
-    + '<div class="stat-card"><div class="stat-card-bg">📉</div><div class="stat-label">Расходы</div><div class="stat-val" style="color:#f87171">' + fmt(txOut) + '</div></div>'
-    + '</div>';
-}
-
-function _addMenuHtml() {
-  if (!state.showAddMenu) return '';
-  const ringClass = 'bot-add-ring open';
-  // update the ring visually
-  const ring = document.getElementById('add-ring');
-  if (ring) ring.className = ringClass;
-  return '<div class="add-menu-overlay" id="add-overlay-real" onclick="state.showAddMenu=false;render()"></div>'
-    + '<div class="add-menu" style="animation:popUp 0.18s ease">'
-    + '<button class="add-menu-item" id="btn-manual-real">'
-    +   '<div class="add-menu-item-icon ami-manual">✏️</div>'
-    +   '<div><strong style="display:block;font-size:14px;font-weight:700;color:#fff">Вручную</strong>'
-    +   '<span style="font-size:11px;color:#666">Ввести операцию</span></div>'
-    + '</button>'
-    + '<button class="add-menu-item ai-item" id="btn-ai-real">'
-    +   '<div class="add-menu-item-icon ami-ai">✨</div>'
-    +   '<div><strong style="display:block;font-size:14px;font-weight:700;color:#a78bfa">Через AI</strong>'
-    +   '<span style="font-size:11px;color:#555">Голос или текст</span></div>'
-    + '</button>'
-    + '</div>';
-}
-
-function _bindMobileEvents() {
-  // tabs
-  document.querySelectorAll('.tab').forEach(t => {
-    t.onclick = () => { state.tab = t.dataset.tab; state.showAddMenu = false; render(); };
-  });
-  // topbar
-  const btnProj = document.getElementById('btn-open-project-switcher-m');
-  if (btnProj) btnProj.onclick = () => { state.showProjectSwitcher = true; render(); };
-  const btnPeriod = document.getElementById('m-period-btn');
-  if (btnPeriod) btnPeriod.onclick = () => { state.showPeriodModal = true; render(); };
-  // bottom bar + button
-  const btnAdd = document.getElementById('btn-add');
-  if (btnAdd) btnAdd.onclick = (e) => { e.stopPropagation(); state.showAddMenu = !state.showAddMenu; const ring = document.getElementById('add-ring'); if(ring) ring.className = 'bot-add-ring' + (state.showAddMenu?' open':''); if(!state.showAddMenu) render(); else { const m = _addMenuHtml(); const tmp = document.createElement('div'); tmp.innerHTML = m; document.body.appendChild(tmp.firstChild); document.body.appendChild(tmp.firstChild); _bindAddMenu(); } };
-  const btnProf = document.getElementById('btn-profile');
-  if (btnProf) btnProf.onclick = () => { state.showProfileModal = true; render(); };
-  const btnSet = document.getElementById('btn-settings');
-  if (btnSet) btnSet.onclick = () => { state.showSettingsModal = true; render(); };
-  // add menu real buttons
-  _bindAddMenu();
-}
-
-function _bindAddMenu() {
-  const btnManual = document.getElementById('btn-manual-real');
-  if (btnManual) btnManual.onclick = () => { state.showAddMenu = false; state.showModePicker = true; render(); };
-  const btnAi = document.getElementById('btn-ai-real');
-  if (btnAi) btnAi.onclick = () => { state.showAddMenu = false; state.showAiChat = true; render(); };
-}
-
-// ── Patch tabsHtml to return empty (tabs are static in mockup HTML) ──
-function tabsHtml() { return ''; }
-
-// ── headerHtml not needed (header is static in mockup) ──
-function headerHtml() { return ''; }
-
-</script>
 
 
 <script>
@@ -507,7 +359,7 @@ let _projectEmoji= '💼';
 
 async function initAuth() {
   const showStatus = (msg) => {
-    const el = document.getElementById('app');
+    const el = document.getElementById('content-root');
     if (el) el.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:120px;gap:16px;min-height:60vh"><div style="font-size:48px;animation:spin 2s linear infinite">⚙️</div><div style="font-size:14px;color:#555">' + msg + '</div></div><style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>';
   };
   showStatus('Проверяем сессию...');
@@ -519,7 +371,7 @@ async function initAuth() {
     ]);
     sessionData = result;
   } catch(e) {
-    document.getElementById('app').innerHTML = '<div style="color:orange;padding:40px;font-family:monospace">Ошибка подключения: ' + e.message + '<br><br>Попробуй обновить страницу</div>';
+    document.getElementById('content-root').innerHTML = '<div style="color:orange;padding:40px;font-family:monospace">Ошибка подключения: ' + e.message + '<br><br>Попробуй обновить страницу</div>';
     return false;
   }
   const { data } = sessionData;
@@ -1035,7 +887,7 @@ function renderOnboarding() {
       return '<button data-ob-color="' + c + '" style="width:30px;height:30px;border-radius:50%;border:3px solid ' + (sel ? '#fff' : 'transparent') + ';background:' + c + ';cursor:pointer;transform:' + (sel ? 'scale(1.2)' : 'scale(1)') + '"></button>';
     }).join('');
 
-    document.getElementById('app').innerHTML =
+    document.getElementById('content-root').innerHTML =
       '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px">' +
         '<div style="background:rgba(16,16,28,0.98);border:1px solid rgba(255,255,255,0.1);border-radius:24px;padding:40px;width:100%;max-width:440px">' +
           '<div style="text-align:center;margin-bottom:32px">' +
@@ -1109,12 +961,12 @@ function renderOnboarding() {
 function render() {
   try {
     document.getElementById('header-root').innerHTML = headerHtml();
-    document.getElementById('app').innerHTML = bodyHtml();
+    document.getElementById('content-root').innerHTML = bodyHtml();
     bindEvents();
     renderCharts();
   } catch(e) {
     console.error('RENDER ERROR:', e);
-    document.getElementById('app').innerHTML = '<div style="color:red;padding:40px;font-family:monospace">Ошибка рендера: ' + e.message + '<br><br>' + e.stack + '</div>';
+    document.getElementById('content-root').innerHTML = '<div style="color:red;padding:40px;font-family:monospace">Ошибка рендера: ' + e.message + '<br><br>' + e.stack + '</div>';
   }
 }
 
@@ -5603,7 +5455,7 @@ function applyTheme() {
 // ── Init with cloud ──────────────────────────────
 (async () => {
   try {
-  document.getElementById('app').innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:120px;gap:16px;min-height:60vh">
+  document.getElementById('content-root').innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:120px;gap:16px;min-height:60vh">
   <div style="font-size:48px;animation:spin 2s linear infinite">⚙️</div>
   <div style="font-size:15px;color:#555;letter-spacing:0.05em">Загрузка...</div>
 </div>
@@ -5621,7 +5473,7 @@ function applyTheme() {
     ]);
   } catch(e) {
     console.error('[init] cloudLoad error:', e);
-    document.getElementById('app').innerHTML = '<div style="color:orange;padding:40px;font-family:monospace">cloudLoad ошибка: ' + e.message + '</div>';
+    document.getElementById('content-root').innerHTML = '<div style="color:orange;padding:40px;font-family:monospace">cloudLoad ошибка: ' + e.message + '</div>';
     cloudData = null;
   }
   console.log('[init] step 3: render');
@@ -5886,7 +5738,7 @@ function applyTheme() {
 
   // ── AI Chat: Enter to send (Shift+Enter = newline) ──
   } catch(initErr) {
-    document.getElementById('app').innerHTML = '<div style="color:red;padding:40px;font-family:monospace">ОШИБКА ИНИЦИАЛИЗАЦИИ:<br>' + initErr.message + '<br><br>' + initErr.stack + '</div>';
+    document.getElementById('content-root').innerHTML = '<div style="color:red;padding:40px;font-family:monospace">ОШИБКА ИНИЦИАЛИЗАЦИИ:<br>' + initErr.message + '<br><br>' + initErr.stack + '</div>';
   }
 
   // ── Transaction click delegation (open detail, edit, delete) ──
@@ -6819,5 +6671,155 @@ function doExportPdf() {
 }
 </script>
 
+
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  MOBILE ADAPTER — bridges finance.html logic to mockup design
+// ═══════════════════════════════════════════════════════════════
+
+// ── Patch render() to update mockup's static DOM ──────────────
+function render() {
+  try {
+    // 1. Update topbar
+    _updateTopbar();
+    // 2. Update tab active states  
+    _updateTabs();
+    // 3. Render content into #content-root
+    document.getElementById('content-root').innerHTML =
+        _ratesHtml()
+      + statsHtml()
+      + contentHtml()
+      + (state.showModal         ? modalHtml()                             : '')
+      + (state.showModePicker    ? modePickerHtml()                        : '')
+      + (state.showAiChat        ? aiChatHtml()                            : '')
+      + (state.showRates         ? ratesModalHtml()                        : '')
+      + (state.showSettingsModal ? settingsModalHtml()                     : '')
+      + (state.showPeriodModal       ? periodModalHtml()                   : '')
+      + (state.showProjectSwitcher   ? projectSwitcherHtml()               : '')
+      + (state.showProfileModal  ? profileModalHtml()                      : '')
+      + (state.showEditTxModal   ? editTxModalHtml(state.showEditTxModal)  : '')
+      + (state.showTxDetail      ? txDetailModalHtml(state.showTxDetail)   : '')
+      + (state.showExportModal   ? exportModalHtml()                       : '')
+      + _addMenuHtml();
+    // 4. Bind all events
+    bindEvents();
+    _bindMobileEvents();
+    renderCharts();
+  } catch(e) {
+    console.error('RENDER ERROR:', e);
+    document.getElementById('content-root').innerHTML =
+      '<div style="color:#f87171;padding:20px;font-size:13px;font-family:monospace">Ошибка: ' + e.message + '</div>';
+  }
+}
+
+function _updateTopbar() {
+  const am = state.activeMonth || '';
+  const [yr, mo] = am ? am.split('-') : ['',''];
+  const monthLabel = mo ? MONTHS[parseInt(mo)-1] + ' ' + yr : 'Период';
+  const periodLabel = state.activePeriod ? activePeriodLabel() : monthLabel;
+  const periodActive = !!state.activePeriod;
+
+  const nameEl = document.getElementById('m-project-name');
+  const emojiEl = document.getElementById('m-project-emoji');
+  const periodEl = document.getElementById('m-period-btn');
+  if (nameEl)  nameEl.textContent = _projectName || 'MyFinanceAI';
+  if (emojiEl) emojiEl.textContent = _projectEmoji || '💼';
+  if (periodEl) {
+    periodEl.textContent = '📅 ' + periodLabel;
+    periodEl.classList.toggle('active', periodActive);
+  }
+}
+
+function _updateTabs() {
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === state.tab);
+  });
+}
+
+function _ratesHtml() {
+  const upd = state.rates.updatedAt
+    ? new Date(state.rates.updatedAt).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})
+    : '';
+  return '<div class="rates-strip">'
+    + '<div class="rate-chip">SAR = <strong>' + (state.rates.SAR||0).toFixed(2) + ' ₽</strong></div>'
+    + '<div class="rate-chip">USDT = <strong class="usdt">' + (state.rates.USDT||0).toFixed(2) + ' ₽</strong></div>'
+    + '<div class="rate-chip">USD = <strong style="color:#60a5fa">' + (state.rates.USD||0).toFixed(2) + ' ₽</strong></div>'
+    + (upd ? '<div class="rate-chip" style="color:#555;font-size:11px">' + upd + '</div>' : '')
+    + '</div>';
+}
+
+function statsHtml() {
+  const mtxs = monthTxs();
+  const txIn  = mtxs.filter(t=>t.type==='income').reduce((s,t)=>s+toRub(t.amount,t.currency),0);
+  const txOut = mtxs.filter(t=>t.type==='expense').reduce((s,t)=>s+toRub(t.amount,t.currency),0);
+  const bal   = Object.values(state.accounts).reduce((s,a)=>s+toRub(a.balance,a.currency),0);
+  const profit = txIn - txOut;
+  const balC = bal>=0?'#a78bfa':'#f87171';
+  const pc   = profit>=0?'#a78bfa':'#f87171';
+  return '<div class="stats">'
+    + '<div class="stat-card"><div class="stat-card-bg">💼</div><div class="stat-label">Баланс</div><div class="stat-val" style="color:' + balC + '">' + fmt(bal) + '</div></div>'
+    + '<div class="stat-card"><div class="stat-card-bg">✨</div><div class="stat-label">Прибыль</div><div class="stat-val" style="color:' + pc + '">' + fmt(profit) + '</div></div>'
+    + '<div class="stat-card"><div class="stat-card-bg">📈</div><div class="stat-label">Доходы</div><div class="stat-val" style="color:#6ee7b7">' + fmt(txIn) + '</div></div>'
+    + '<div class="stat-card"><div class="stat-card-bg">📉</div><div class="stat-label">Расходы</div><div class="stat-val" style="color:#f87171">' + fmt(txOut) + '</div></div>'
+    + '</div>';
+}
+
+function _addMenuHtml() {
+  if (!state.showAddMenu) return '';
+  const ringClass = 'bot-add-ring open';
+  // update the ring visually
+  const ring = document.getElementById('add-ring');
+  if (ring) ring.className = ringClass;
+  return '<div class="add-menu-overlay" id="add-overlay-real" onclick="state.showAddMenu=false;render()"></div>'
+    + '<div class="add-menu" style="animation:popUp 0.18s ease">'
+    + '<button class="add-menu-item" id="btn-manual-real">'
+    +   '<div class="add-menu-item-icon ami-manual">✏️</div>'
+    +   '<div><strong style="display:block;font-size:14px;font-weight:700;color:#fff">Вручную</strong>'
+    +   '<span style="font-size:11px;color:#666">Ввести операцию</span></div>'
+    + '</button>'
+    + '<button class="add-menu-item ai-item" id="btn-ai-real">'
+    +   '<div class="add-menu-item-icon ami-ai">✨</div>'
+    +   '<div><strong style="display:block;font-size:14px;font-weight:700;color:#a78bfa">Через AI</strong>'
+    +   '<span style="font-size:11px;color:#555">Голос или текст</span></div>'
+    + '</button>'
+    + '</div>';
+}
+
+function _bindMobileEvents() {
+  // tabs
+  document.querySelectorAll('.tab').forEach(t => {
+    t.onclick = () => { state.tab = t.dataset.tab; state.showAddMenu = false; render(); };
+  });
+  // topbar
+  const btnProj = document.getElementById('btn-open-project-switcher-m');
+  if (btnProj) btnProj.onclick = () => { state.showProjectSwitcher = true; render(); };
+  const btnPeriod = document.getElementById('m-period-btn');
+  if (btnPeriod) btnPeriod.onclick = () => { state.showPeriodModal = true; render(); };
+  // bottom bar + button
+  const btnAdd = document.getElementById('btn-add');
+  if (btnAdd) btnAdd.onclick = (e) => { e.stopPropagation(); state.showAddMenu = !state.showAddMenu; const ring = document.getElementById('add-ring'); if(ring) ring.className = 'bot-add-ring' + (state.showAddMenu?' open':''); if(!state.showAddMenu) render(); else { const m = _addMenuHtml(); const tmp = document.createElement('div'); tmp.innerHTML = m; document.body.appendChild(tmp.firstChild); document.body.appendChild(tmp.firstChild); _bindAddMenu(); } };
+  const btnProf = document.getElementById('btn-profile');
+  if (btnProf) btnProf.onclick = () => { state.showProfileModal = true; render(); };
+  const btnSet = document.getElementById('btn-settings');
+  if (btnSet) btnSet.onclick = () => { state.showSettingsModal = true; render(); };
+  // add menu real buttons
+  _bindAddMenu();
+}
+
+function _bindAddMenu() {
+  const btnManual = document.getElementById('btn-manual-real');
+  if (btnManual) btnManual.onclick = () => { state.showAddMenu = false; state.showModePicker = true; render(); };
+  const btnAi = document.getElementById('btn-ai-real');
+  if (btnAi) btnAi.onclick = () => { state.showAddMenu = false; state.showAiChat = true; render(); };
+}
+
+// ── Patch tabsHtml to return empty (tabs are static in mockup HTML) ──
+function tabsHtml() { return ''; }
+
+// ── headerHtml not needed (header is static in mockup) ──
+function headerHtml() { return ''; }
+
+</script>
 </body>
 </html>
