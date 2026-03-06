@@ -6,7 +6,13 @@
   [headers.values]
     Access-Control-Allow-Origin = "*"
 
-# Mobile redirect — phones go to finance-mobile.html
+# Mobile → finance-mobile.html
+[[redirects]]
+  from = "/finance.html"
+  to = "/finance-mobile.html"
+  status = 200
+  conditions = {UserAgent = ["(?i).*(?:iphone|android|mobile|ipod|blackberry|windows phone|iemobile).*"]}
+
 [[redirects]]
   from = "/dashboard"
   to = "/finance-mobile.html"
