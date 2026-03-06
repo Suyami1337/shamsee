@@ -587,6 +587,7 @@ let state = {
   showModePicker: false,
   showAiChat: false,
   showMobileMenu: false,
+  showAddMenu: false,
   aiMessages: [],
   aiPendingTxs: [],
   aiPendingCats: [],
@@ -3923,17 +3924,24 @@ function confirmAiTxs() {
 
 // ─── BIND EVENTS ───────────────────────────────────────────────────────────
 function bindEvents() {
-  // Mobile menu toggle
-  const btnMobileMenu = document.getElementById('btn-mobile-menu');
-  if (btnMobileMenu) btnMobileMenu.onclick = (e) => {
+  // + button opens add menu
+  const btnAddPlus = document.getElementById('btn-add-plus');
+  if (btnAddPlus) btnAddPlus.onclick = (e) => {
     e.stopPropagation();
-    state.showMobileMenu = !state.showMobileMenu;
+    state.showAddMenu = !state.showAddMenu;
     render();
   };
-  // AI chat from mobile menu
-  const btnAiChatMobile = document.getElementById('btn-ai-chat-mobile');
-  if (btnAiChatMobile) btnAiChatMobile.onclick = () => {
-    state.showMobileMenu = false;
+  // Add manually
+  const btnAddManual = document.getElementById('btn-add-manual');
+  if (btnAddManual) btnAddManual.onclick = () => {
+    state.showAddMenu = false;
+    state.showModePicker = true;
+    render();
+  };
+  // Add via AI
+  const btnAddAi = document.getElementById('btn-add-ai');
+  if (btnAddAi) btnAddAi.onclick = () => {
+    state.showAddMenu = false;
     state.showAiChat = true;
     render();
   };
@@ -4175,7 +4183,7 @@ function bindEvents() {
 
   // tabs
   document.querySelectorAll('[data-tab]').forEach(el => {
-    el.onclick = () => { state.tab = el.dataset.tab; state.showMobileMenu = false; render(); };
+    el.onclick = () => { state.tab = el.dataset.tab; state.showMobileMenu = false; state.showAddMenu = false; render(); };
   });
 
   // filter buttons
@@ -6731,17 +6739,19 @@ function doExportPdf() {
 
 function headerHtml() {
   const periodActive = !!state.activePeriod;
+  const am = state.activeMonth || '';
+  const [yr, mo] = am ? am.split('-') : ['', ''];
+  const monthShort = mo ? MONTHS[parseInt(mo)-1].slice(0,3) + ' ' + yr : '';
+  const periodLabel = periodActive ? activePeriodLabel() : (monthShort || 'Период');
   return '<div class="m-topbar">'
-    + '<div class="m-topbar-left">'
     + '<button class="m-project-btn" id="btn-open-project-switcher">'
     + '<span>' + _projectEmoji + '</span>'
     + '<span>' + (_projectName || 'MyFinanceAI') + '</span>'
     + '<span class="arrow">▾</span>'
     + '</button>'
-    + '</div>'
-    + '<div class="m-topbar-right">'
-    + '<button class="m-period-btn' + (periodActive ? ' active' : '') + '" id="btn-period-open">📅 ' + activePeriodLabel() + '</button>'
-    + '</div>'
+    + '<button class="m-period-btn' + (periodActive ? ' active' : '') + '" id="btn-period-open">'
+    + '📅 ' + periodLabel
+    + '</button>'
     + '</div>';
 }
 
@@ -6801,9 +6811,17 @@ function ratesBarHtml() {
 
 // Bottom bar HTML — injected into page structure
 function bottomBarHtml() {
-  return '<div class="m-bottombar">'
+  const addMenu = state.showAddMenu
+    ? '<div style="position:fixed;bottom:calc(var(--bot-h) + 10px);left:50%;transform:translateX(-50%);z-index:200;background:rgba(16,16,28,0.98);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:8px;min-width:220px;box-shadow:0 -8px 40px rgba(0,0,0,0.6)">'
+      + '<button id="btn-add-manual" style="width:100%;padding:14px 18px;border-radius:13px;border:none;background:rgba(255,255,255,0.05);color:#fff;font-size:14px;font-weight:600;cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px;margin-bottom:6px">✏️ <span>Вручную</span></button>'
+      + '<button id="btn-add-ai" style="width:100%;padding:14px 18px;border-radius:13px;border:none;background:rgba(167,139,250,0.1);color:#a78bfa;font-size:14px;font-weight:600;cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px">✨ <span>Через AI</span></button>'
+      + '</div>'
+      + '<div id="add-menu-overlay" style="position:fixed;inset:0;z-index:199;background:rgba(0,0,0,0.4)" onclick="state.showAddMenu=false;render()"></div>'
+    : '';
+  return addMenu
+    + '<div class="m-bottombar">'
     + '<button class="m-bot-btn" id="btn-profile-dash"><span class="m-bot-icon">👤</span><span>Профиль</span></button>'
-    + '<div class="m-bot-add" id="btn-add"><div class="m-bot-add-circle">+</div><span class="m-bot-add-label">Операция</span></div>'
+    + '<div class="m-bot-add" id="btn-add-plus"><div class="m-bot-add-circle">+</div><span class="m-bot-add-label">Добавить</span></div>'
     + '<button class="m-bot-btn" id="btn-settings-header"><span class="m-bot-icon">⚙️</span><span>Настройки</span></button>'
     + '</div>';
 }
