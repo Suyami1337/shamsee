@@ -4034,7 +4034,7 @@ function confirmAiTxs() {
         id,
         date: tx.date || today,
         type: tx.type,
-        direction: tx.direction,
+        direction: tx.direction || _projectId || '',
         account: tx.account,
         amount, currency: tx.currency || 'RUB',
         category: tx.category || '',
@@ -5055,6 +5055,7 @@ function bindEvents() {
       }
       const tx = {
         id, date, type, account,
+        direction: _projectId || '',
         amount: deductAmt,
         currency, category, note,
         createdAt: Date.now(), createdAtMs: Date.now(), updatedAtMs: null,
@@ -5236,6 +5237,17 @@ function bindEvents() {
     if (text) { inp.value = ''; inp.style.height = '42px'; sendAiMessage(text, null); }
   };
   if (aiVoiceBtn2) aiVoiceBtn2.onclick = () => startVoiceInput();
+
+  // ── Категории — вешаем сразу, независимо от pending txs ──
+  const confirmCatsBtnD = document.getElementById('btn-confirm-cats');
+  if (confirmCatsBtnD) confirmCatsBtnD.onclick = () => confirmAiCats();
+  const rejectCatsBtnD = document.getElementById('btn-reject-cats');
+  if (rejectCatsBtnD) rejectCatsBtnD.onclick = () => {
+    state.aiPendingCats = [];
+    state.aiMessages.push({ role: 'assistant', text: '\u2715 Новые категории отклонены.' });
+    render(); scrollAiToBottom();
+  };
+
   if (aiConfirmBtn) aiConfirmBtn.onclick = () => {
     const confirmEntitiesBtn = document.getElementById('btn-confirm-entities');
     if (confirmEntitiesBtn) confirmEntitiesBtn.onclick = () => {
@@ -5266,14 +5278,6 @@ function bindEvents() {
     if (rejectEntitiesBtn) rejectEntitiesBtn.onclick = () => {
       state.aiPendingEntities = null;
       state.aiMessages.push({ role: 'assistant', text: '✕ Создание отменено.' });
-      render(); scrollAiToBottom();
-    };
-    const confirmCatsBtn = document.getElementById('btn-confirm-cats');
-    if (confirmCatsBtn) confirmCatsBtn.onclick = () => confirmAiCats();
-    const rejectCatsBtn = document.getElementById('btn-reject-cats');
-    if (rejectCatsBtn) rejectCatsBtn.onclick = () => {
-      state.aiPendingCats = [];
-      state.aiMessages.push({ role: 'assistant', text: '✕ Новые категории отклонены.' });
       render(); scrollAiToBottom();
     };
     if (state.aiPendingTxs.length === 0) return;
@@ -5313,13 +5317,8 @@ function bindEvents() {
           const acc = state.accounts[tx.account];
           if (!acc) { errors.push(`#${i+1}: счёт "${tx.account}" не найден`); return; }
           if (!tx.category) { errors.push(`#${i+1}: не указана категория`); return; }
-          if (!tx.direction) { errors.push(`#${i+1}: не указано направление`); return; }
-          if (acc.direction !== tx.direction) {
-            const accDir = state.directions[acc.direction];
-            const txDir  = state.directions[tx.direction];
-            errors.push(`#${i+1}: счёт "${acc.name}" принадлежит направлению "${accDir?.label||acc.direction}", а не "${txDir?.label||tx.direction}" — несовпадение направления и счёта`);
-            return;
-          }
+          // direction — подставляем projectId если не задано
+          if (!tx.direction) tx.direction = _projectId || '';
           const amt = parseFloat(tx.amount) || 0;
           if (amt <= 0) { errors.push(`#${i+1}: некорректная сумма`); return; }
           if (tx.type === 'income')  acc.balance += amt;
