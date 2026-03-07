@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { background: #080808; margin: 0; }
+</style>
+<script>
+(function() {
+  var ua = navigator.userAgent || '';
+  var isMobile = /iPhone|iPad|iPod|Android|BlackBerry|Windows Phone|IEMobile|Opera Mini|Silk|webOS/i.test(ua);
+  // Also check screen width as fallback
+  var isNarrow = window.innerWidth <= 768;
+  if (isMobile || isNarrow) {
+    window.location.replace('/finance-mobile.html');
+  } else {
+    window.location.replace('/finance.html');
+  }
+})();
+</script>
+</head>
+<body></body>
+</html>

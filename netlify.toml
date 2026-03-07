@@ -4,39 +4,16 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    Access-Control-Allow-Origin = "*"
     X-Content-Type-Options = "nosniff"
     X-Frame-Options = "DENY"
     Referrer-Policy = "strict-origin-when-cross-origin"
 
-# ── /dashboard: mobile UA → mobile version ──
+# /dashboard → JS-роутер, который сам определяет устройство
 [[redirects]]
   from = "/dashboard"
-  to = "/finance-mobile.html"
-  status = 200
-  conditions = {UserAgent = ["(?i).*(iphone|android|mobile|ipod|blackberry|windows phone|iemobile|opera mini|silk|webos).*"]}
-
-# ── /dashboard: desktop → desktop version ──
-[[redirects]]
-  from = "/dashboard"
-  to = "/finance.html"
+  to = "/dashboard.html"
   status = 200
 
-# ── finance.html opened directly on mobile → redirect to mobile ──
-[[redirects]]
-  from = "/finance.html"
-  to = "/finance-mobile.html"
-  status = 302
-  conditions = {UserAgent = ["(?i).*(iphone|android|mobile|ipod|blackberry|windows phone|iemobile|opera mini|silk|webos).*"]}
-
-# ── finance-mobile.html opened directly on desktop → redirect to desktop ──
-[[redirects]]
-  from = "/finance-mobile.html"
-  to = "/finance.html"
-  status = 302
-  conditions = {UserAgent = ["(?i)^(?!.*(iphone|android|mobile|ipod|blackberry|windows phone|iemobile|opera mini|silk|webos)).*$"]}
-
-# ── Auth pages ──
 [[redirects]]
   from = "/login"
   to = "/auth-mockup.html"
