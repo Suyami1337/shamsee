@@ -1619,7 +1619,7 @@ function txItemHtml(t) {
   const typeLabel = t.type==='income'?'🟢 Доход':t.type==='expense'?'🔴 Расход':t.type==='transfer'?'🟡 Перевод':isDividend?'🟣 Дивиденды':'Неизвестно';
   const typeBg    = t.type==='income'?'rgba(110,231,183,0.08)':t.type==='expense'?'rgba(239,68,68,0.08)':isDividend?'rgba(167,139,250,0.08)':'rgba(251,191,36,0.08)';
   const typeBorder= t.type==='income'?'rgba(110,231,183,0.2)':t.type==='expense'?'rgba(239,68,68,0.2)':isDividend?'rgba(167,139,250,0.2)':'rgba(251,191,36,0.2)';
-  const accName = acc ? acc.name : t.account;
+  const accName = acc ? acc.name : '—';
   const sub = t.currency!=='RUB' ? `<div style="font-size:11px;color:#555;margin-top:1px">≈${fmt(toRub(t.amount,t.currency))}</div>` : '';
   return `
     <div class="tx-item" data-tx-open="${t.id}" style="cursor:pointer;display:flex;align-items:center;gap:12px;padding:20px 16px">
@@ -5473,6 +5473,29 @@ function bindEvents() {
   if (!window._projSwitcherClickBound) {
     window._projSwitcherClickBound = true;
   document.addEventListener('click', async function(e) {
+    // Open tx detail on click
+    const txOpenEl = e.target.closest('[data-tx-open]');
+    if (txOpenEl && !e.target.closest('[data-tx-edit],[data-tx-del],.tx-act-btn')) {
+      state.showTxDetail = txOpenEl.dataset.txOpen;
+      render();
+      return;
+    }
+    // tx edit / delete inside detail modal (delegated)
+    const txEditBtn = e.target.closest('[data-tx-edit]');
+    if (txEditBtn) { state.showTxDetail = null; state.showEditTx = txEditBtn.dataset.txEdit; render(); return; }
+    const txDelBtn = e.target.closest('[data-tx-del]');
+    if (txDelBtn) {
+      const txId = txDelBtn.dataset.txDel;
+      const tx = state.transactions.find(t => t.id === txId);
+      if (tx) {
+        const acc = state.accounts[tx.account];
+        if (acc) { if (tx.type==='income') acc.balance -= parseFloat(tx.amount)||0; else if (tx.type==='expense') acc.balance += parseFloat(tx.amount)||0; }
+        state.transactions = state.transactions.filter(t => t.id !== txId);
+        state.showTxDetail = null;
+        saveToStorage(); render();
+      }
+      return;
+    }
     // Open switcher (desktop: btn-open-project-switcher, mobile: btn-open-project-switcher-m)
     if (e.target.closest('#btn-open-project-switcher') || e.target.closest('#btn-open-project-switcher-m')) {
       state.showProjectSwitcher = true;
