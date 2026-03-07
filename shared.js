@@ -5482,7 +5482,7 @@ function bindEvents() {
     }
     // tx edit / delete inside detail modal (delegated)
     const txEditBtn = e.target.closest('[data-tx-edit]');
-    if (txEditBtn) { state.showTxDetail = null; state.showEditTx = txEditBtn.dataset.txEdit; render(); return; }
+    if (txEditBtn) { state.showTxDetail = null; state.showEditTxModal = txEditBtn.dataset.txEdit; render(); return; }
     const txDelBtn = e.target.closest('[data-tx-del]');
     if (txDelBtn) {
       const txId = txDelBtn.dataset.txDel;
