@@ -61,7 +61,17 @@ exports.handler = async function(event) {
   }
 
   try {
-    const GROQ_API_KEY = process.env.GROQ_API_KEY;
+    let GROQ_API_KEY = process.env.GROQ_API_KEY;
+    if (!GROQ_API_KEY && isLocalhost) {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const envPath = path.join(__dirname, '../../.env');
+        const envFile = fs.readFileSync(envPath, 'utf8');
+        const match = envFile.match(/GROQ_API_KEY=(.+)/);
+        if (match) GROQ_API_KEY = match[1].trim();
+      } catch(_) {}
+    }
     if (!GROQ_API_KEY) {
       return {
         statusCode: 500,
