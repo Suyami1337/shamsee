@@ -296,7 +296,7 @@
   /* ── SHEET MODAL ── */
   .sheet-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); z-index: 300; display: flex; align-items: flex-end; animation: fadein 0.15s; }
   @keyframes fadein { from{opacity:0} to{opacity:1} }
-  .sheet { background: #0f0f1e; border: 1px solid rgba(255,255,255,0.1); border-radius: 24px 24px 0 0; padding: 24px 20px 36px; width: 100%; max-height: 85vh; overflow-y: auto; animation: slideUp 0.22s ease; }
+  .sheet { background: #0f0f1e; border: 1px solid rgba(255,255,255,0.1); border-radius: 24px 24px 0 0; padding: 24px 20px 36px; width: 100%; max-height: 85vh; overflow-y: auto; animation: slideUp 0.22s ease; overscroll-behavior: none; }
   @keyframes slideUp { from{transform:translateY(40px);opacity:0} to{transform:translateY(0);opacity:1} }
   .sheet-handle { width: 36px; height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px; margin: 0 auto 20px; }
   .sheet-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; color: #fff; margin-bottom: 20px; }
@@ -494,16 +494,22 @@
     background: #0f0f1e !important;
     border: 1px solid rgba(255,255,255,0.1) !important;
     margin: 0 !important;
+    overscroll-behavior: none !important;
   }
   /* Drag handle via pseudo-element */
   .modal::before {
     content: '';
     display: block;
-    width: 36px;
-    height: 4px;
-    background: rgba(255,255,255,0.15);
+    width: 40px;
+    height: 5px;
+    background: rgba(255,255,255,0.2);
     border-radius: 4px;
-    margin: 14px auto 10px;
+    margin: 14px auto 12px;
+    flex-shrink: 0;
+  }
+  /* Increase top padding so handle is easy to grab */
+  .modal {
+    padding-top: 0 !important;
   }
   /* Hide close ×  buttons — swipe to close instead */
   .modal .modal-close { display: none !important; }
@@ -527,7 +533,7 @@
     <span id="m-proj-name" class="top-project-name">...</span>
     <span class="top-project-arrow">▾</span>
   </button>
-  <div style="position:absolute;left:50%;transform:translateX(-50%);font-size:13px;font-weight:800;font-family:'Syne',sans-serif;color:#fff;letter-spacing:-0.3px;pointer-events:none">My<span style="color:#a78bfa">Finance</span>AI</div>
+  <div class="top-logo" style="position:absolute;left:50%;transform:translateX(-50%);pointer-events:none;font-size:18px;font-weight:800;font-family:'Inter',-apple-system,sans-serif;background:linear-gradient(90deg,#a78bfa,#6ee7b7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-0.02em;white-space:nowrap">MyFinanceAI</div>
   <button class="top-period" id="btn-period-open">📅 ...</button>
 </div>
 
@@ -1143,6 +1149,97 @@ function statsHtml() {
 function tabsHtml()  { return ''; }
 function headerHtml(){ return ''; }
 
+function _mAdvReset() {
+  state.txCatFilter = []; state.txDateFrom = ''; state.txDateTo = ''; render();
+}
+function _mAdvApply() {
+  var df = document.getElementById('m-adv-date-from');
+  var dt = document.getElementById('m-adv-date-to');
+  if (df) state.txDateFrom = df.value;
+  if (dt) state.txDateTo   = dt.value;
+  state.showMobileAdvFilter = false;
+  render();
+}
+
+function mobileAdvFilterSheet() {
+  var sel = state.txCatFilter || [];
+  var hasFilter = sel.length > 0 || state.txDateFrom || state.txDateTo;
+
+  // ── Category rows: label + checkboxes ──────────────────────────────────
+  function catRow(c, color, accentRgb) {
+    var active  = sel.indexOf(c) >= 0;
+    var bg      = active ? 'rgba(' + accentRgb + ',0.08)' : 'transparent';
+    var txtClr  = active ? color : '#aaa';
+    return '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:6px 4px;border-radius:8px;background:' + bg + '">'
+      + '<input type="checkbox" data-adv-cat="' + escapeHtml(c) + '" ' + (active ? 'checked' : '') + ' style="accent-color:' + color + ';width:15px;height:15px;flex-shrink:0">'
+      + '<span style="font-size:14px;color:' + txtClr + '">' + escapeHtml(c) + '</span>'
+      + '</label>';
+  }
+
+  function sectionTitle(dotColor, label, color) {
+    return '<div style="font-size:11px;font-weight:700;color:' + color + ';text-transform:uppercase;letter-spacing:0.07em;padding:12px 0 6px;display:flex;align-items:center;gap:6px">'
+      + '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + dotColor + ';flex-shrink:0"></span>'
+      + label + '</div>';
+  }
+
+  var inCats  = getDirCats('_global', 'in').filter(function(c){ return c !== 'Перевод входящий'; });
+  var outCats = getDirCats('_global', 'out').filter(function(c){ return c !== 'Перевод исходящий'; });
+  var ddsCats = (typeof CATEGORIES_DDS !== 'undefined') ? CATEGORIES_DDS : [];
+  var txDivCats = Array.from(new Set(
+    (state.transactions || []).filter(function(t){ return t.type === 'dividend'; })
+      .map(function(t){ return t.category; }).filter(Boolean)
+  ));
+  var divCats = Array.from(new Set(
+    ((typeof CATEGORIES_DIVIDENDS !== 'undefined' ? CATEGORIES_DIVIDENDS : []).concat(txDivCats))
+  ));
+
+  var catsHtml =
+    sectionTitle('#6ee7b7', 'Доходы', '#6ee7b7') +
+    inCats.map(function(c){ return catRow(c, '#6ee7b7', '110,231,183'); }).join('') +
+
+    sectionTitle('#f87171', 'Расходы', '#f87171') +
+    outCats.map(function(c){ return catRow(c, '#f87171', '248,113,113'); }).join('') +
+
+    sectionTitle('#fbbf24', 'Переводы', '#fbbf24') +
+    ddsCats.map(function(c){ return catRow(c, '#fbbf24', '251,191,36'); }).join('') +
+
+    (divCats.length
+      ? sectionTitle('#a78bfa', 'Дивиденды', '#a78bfa') +
+        divCats.map(function(c){ return catRow(c, '#a78bfa', '167,139,250'); }).join('')
+      : '');
+
+  return ''
+    + '<div class="sheet-overlay" onclick="if(event.target===this){state.showMobileAdvFilter=false;render()}">'
+    + '<div id="m-adv-sheet-inner" class="sheet">'
+    + '<div class="sheet-handle"></div>'
+
+    // Header
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+    +   '<span style="font-size:16px;font-weight:700;color:#fff">Фильтр</span>'
+    +   (hasFilter ? '<button onclick="_mAdvReset()" style="padding:5px 12px;border-radius:10px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);color:#f87171;font-size:12px;cursor:pointer;font-family:inherit">Сбросить</button>' : '')
+    + '</div>'
+
+    // Date range
+    + '<div style="margin-bottom:4px">'
+    +   '<div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:0.07em;padding:12px 0 8px">Период</div>'
+    +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    +     '<div><div style="font-size:11px;color:#555;margin-bottom:4px">С</div>'
+    +     '<input type="date" id="m-adv-date-from" value="' + (state.txDateFrom||'') + '" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px;color:#ccc;font-size:13px;box-sizing:border-box"></div>'
+    +     '<div><div style="font-size:11px;color:#555;margin-bottom:4px">По</div>'
+    +     '<input type="date" id="m-adv-date-to" value="' + (state.txDateTo||'') + '" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px;color:#ccc;font-size:13px;box-sizing:border-box"></div>'
+    +   '</div>'
+    + '</div>'
+
+    // Categories with section titles
+    + '<div style="margin-bottom:16px">' + catsHtml + '</div>'
+
+    // Apply
+    + '<button onclick="_mAdvApply()" style="width:100%;padding:14px;border-radius:14px;border:none;background:linear-gradient(135deg,#6ee7b7,#3b82f6);color:#000;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">Применить</button>'
+
+    + '</div>'
+    + '</div>';
+}
+
 function _mobileFundSheetHtml() {
   if (!state._mobileFundSheet || !state._mobileFundKey) return '';
   const k = state._mobileFundKey;
@@ -1241,41 +1338,56 @@ function _initSwipeClose(containerId, closeFn) {
   const el = document.getElementById(containerId);
   if (!el || el._swipeInited) return;
   el._swipeInited = true;
-  let startY = 0, startX = 0, isDragging = false, isScrolling = false;
+  let startY = 0, startX = 0, startScrollTop = 0;
+  let isDragging = false, isScrolling = false;
+
   const onStart = e => {
     startY = e.touches[0].clientY;
     startX = e.touches[0].clientX;
+    startScrollTop = el.scrollTop;
     isDragging = false;
     isScrolling = false;
     el.style.transition = 'none';
   };
+
   const onMove = e => {
     const dy = e.touches[0].clientY - startY;
     const dx = e.touches[0].clientX - startX;
-    // First move: decide if this is a vertical scroll or a sheet-drag
+
     if (!isDragging && !isScrolling) {
-      if (Math.abs(dy) < 5 && Math.abs(dx) < 5) return; // not moved enough yet
-      if (Math.abs(dx) > Math.abs(dy)) { isScrolling = true; return; } // horizontal — ignore
-      if (dy < 0) { isScrolling = true; return; } // scrolling UP inside sheet — let it scroll
-      isDragging = true; // swiping DOWN from top — drag to close
+      if (Math.abs(dy) < 6 && Math.abs(dx) < 6) return; // haven't moved enough yet
+      if (Math.abs(dx) > Math.abs(dy)) { isScrolling = true; return; } // horizontal swipe
+      // Dragging UP — always let the element scroll
+      if (dy < 0) { isScrolling = true; return; }
+      // Dragging DOWN — only close if already scrolled to top
+      if (dy > 0 && startScrollTop > 4) { isScrolling = true; return; }
+      isDragging = true;
     }
+
     if (isScrolling) return;
+
     if (isDragging && dy > 0) {
       el.style.transform = 'translateY(' + dy + 'px)';
       e.preventDefault();
     }
   };
+
   const onEnd = e => {
     if (!isDragging) return;
     isDragging = false;
-    el.style.transition = 'transform 0.25s ease';
+    el.style.transition = 'transform 0.3s cubic-bezier(0.32,0.72,0,1)';
     const dy = e.changedTouches[0].clientY - startY;
-    if (dy > 80) { el.style.transform = 'translateY(100%)'; setTimeout(closeFn, 220); }
-    else { el.style.transform = ''; }
+    if (dy > 72) {
+      el.style.transform = 'translateY(105%)';
+      setTimeout(closeFn, 280);
+    } else {
+      el.style.transform = '';
+    }
   };
-  el.addEventListener('touchstart', onStart, {passive:true});
-  el.addEventListener('touchmove', onMove, {passive:false});
-  el.addEventListener('touchend', onEnd, {passive:true});
+
+  el.addEventListener('touchstart', onStart, {passive: true});
+  el.addEventListener('touchmove',  onMove,  {passive: false});
+  el.addEventListener('touchend',   onEnd,   {passive: true});
 }
 
 function _renderTabbarOnly() {
@@ -1349,15 +1461,33 @@ function _bindMobileExtra() {
   _initSwipeClose('new-tx-inner',         ()=>{state.showModal=false;render();});
   _initSwipeClose('acc-modal-inner',      ()=>{state.showAccModal=false;render();});
   _initSwipeClose('fund-modal-inner',     ()=>{state.showFundModal=false;render();});
-  _initSwipeClose('period-modal-inner',   ()=>{state.showPeriodModal=false;render();});
+  _initSwipeClose('m-period-inner',        ()=>{state.showPeriodModal=false;render();});
   _initSwipeClose('ai-edit-inner',        ()=>{state.aiEditingIdx=null;render();});
   _initSwipeClose('mode-picker-inner',    ()=>{state.showModePicker=false;render();});
   _initSwipeClose('settings-modal-inner', ()=>{state.showSettingsModal=false;_applySettingsDraft();saveToStorage();render();});
   _initSwipeClose('m-acc-sheet-inner',  ()=>{state.showAccModal=false;render();});
   _initSwipeClose('m-fund-sheet-inner', ()=>{state.showFundModal=false;render();});
   _initSwipeClose('m-adv-sheet-inner',  ()=>{state.showMobileAdvFilter=false;render();});
+
+  // Adv filter: category checkbox toggle
+  document.querySelectorAll('[data-adv-cat]').forEach(function(cb) {
+    cb.onchange = function() {
+      var c = this.getAttribute('data-adv-cat');
+      var f = state.txCatFilter || [];
+      var i = f.indexOf(c);
+      if (this.checked && i < 0) f.push(c);
+      else if (!this.checked && i >= 0) f.splice(i, 1);
+      state.txCatFilter = f;
+      // Don't re-render — just update label color live
+      var lbl = this.parentElement;
+      var span = lbl ? lbl.querySelector('span') : null;
+      var color = lbl ? (lbl.querySelector('input').style.accentColor) : '#aaa';
+      if (lbl) lbl.style.background = this.checked ? lbl.dataset.bg || 'transparent' : 'transparent';
+      if (span) span.style.color = this.checked ? color : '#aaa';
+    };
+  });
   _initSwipeClose('m-profile-inner',    ()=>{state.showProfileModal=false;render();});
-  _initSwipeClose('m-settings-inner',   ()=>{state.showSettingsModal=false;_applySettingsDraft();saveToStorage();render();});
+  _initSwipeClose('settings-modal-inner', ()=>{state.showSettingsModal=false;_applySettingsDraft();saveToStorage();render();});
   _initSwipeClose('m-period-inner',     ()=>{state.showPeriodModal=false;render();});
   _initSwipeClose('m-projects-inner',   ()=>{state.showProjectSwitcher=false;_projSwitcherMode='list';render();});
   _initSwipeClose('m-add-acc-inner',    ()=>{state.showAddAccModal=false;render();});

@@ -1314,7 +1314,7 @@ function editTxModalHtml(txId) {
 
   return `
     <div class="modal-bg" id="edit-tx-bg">
-      <div class="modal" style="max-width:440px">
+      <div id="edit-tx-inner" class="modal" style="max-width:440px">
         <div class="modal-header">
           <span class="modal-title">✏️ Редактировать операцию</span>
           <button class="modal-close" id="edit-tx-close">×</button>
@@ -1348,7 +1348,7 @@ function exportModalHtml() {
   const dateTo   = state.exportDateTo   || '';
   return `
     <div class="modal-bg" id="export-modal-bg">
-      <div class="modal" style="max-width:480px;max-height:90vh;overflow-y:auto">
+      <div id="export-inner" class="modal" style="max-width:480px;max-height:90vh;overflow-y:auto">
         <div class="modal-header">
           <span class="modal-title">📊 Выгрузка в Excel</span>
           <button class="modal-close" id="export-modal-close">×</button>
@@ -1437,16 +1437,16 @@ function transactionsHtml() {
         🏷 Категории${(state.txCatFilter&&state.txCatFilter.length)?' ('+state.txCatFilter.length+')':''}
       </button>
       ${state.showCatPicker ? `<div id="cat-picker-dropdown" style="position:absolute;top:calc(100% + 6px);left:0;z-index:999;background:#1a1a1a;border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:12px 14px;min-width:220px;max-height:340px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.6)">
-        <div style="font-size:11px;font-weight:700;color:#6ee7b7;text-transform:uppercase;letter-spacing:0.06em;padding:2px 0 6px">📈 Доходы</div>
+        <div style="font-size:11px;font-weight:700;color:#6ee7b7;text-transform:uppercase;letter-spacing:0.06em;padding:2px 0 6px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6ee7b7;margin-right:5px;vertical-align:middle"></span>Доходы</div>
         ${getDirCats('_global','in').filter(c=>c!=='Перевод входящий').map(c=>{const sel=state.txCatFilter.includes(c);return `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 4px;border-radius:6px;background:${sel?'rgba(110,231,183,0.08)':'transparent'}"><input type="checkbox" data-cat-check="${c}" ${sel?'checked':''} style="accent-color:#6ee7b7;width:13px;height:13px"><span style="font-size:13px;color:${sel?'#6ee7b7':'#aaa'}">${c}</span></label>`;}).join('')}
-        <div style="font-size:11px;font-weight:700;color:#f87171;text-transform:uppercase;letter-spacing:0.06em;padding:10px 0 6px">📉 Расходы</div>
+        <div style="font-size:11px;font-weight:700;color:#f87171;text-transform:uppercase;letter-spacing:0.06em;padding:10px 0 6px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f87171;margin-right:5px;vertical-align:middle"></span>Расходы</div>
         ${getDirCats('_global','out').filter(c=>c!=='Перевод исходящий').map(c=>{const sel=state.txCatFilter.includes(c);return `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 4px;border-radius:6px;background:${sel?'rgba(248,113,113,0.08)':'transparent'}"><input type="checkbox" data-cat-check="${c}" ${sel?'checked':''} style="accent-color:#f87171;width:13px;height:13px"><span style="font-size:13px;color:${sel?'#f87171':'#aaa'}">${c}</span></label>`;}).join('')}
-        <div style="font-size:11px;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.06em;padding:10px 0 6px">🔄 Переводы</div>
+        <div style="font-size:11px;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.06em;padding:10px 0 6px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#fbbf24;margin-right:5px;vertical-align:middle"></span>Переводы</div>
         ${CATEGORIES_DDS.map(c=>{const sel=state.txCatFilter.includes(c);return `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 4px;border-radius:6px;background:${sel?'rgba(251,191,36,0.08)':'transparent'}"><input type="checkbox" data-cat-check="${c}" ${sel?'checked':''} style="accent-color:#fbbf24;width:13px;height:13px"><span style="font-size:13px;color:${sel?'#fbbf24':'#aaa'}">${c}</span></label>`;}).join('')}
         ${(()=>{
           const txDivCats = [...new Set(state.transactions.filter(t=>t.type==='dividend').map(t=>t.category).filter(Boolean))];
           const divCats = [...new Set([...CATEGORIES_DIVIDENDS, ...txDivCats])];
-          return `<div style="font-size:11px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:0.06em;padding:10px 0 6px">🟣 Дивиденды</div>${divCats.map(c=>{const sel=state.txCatFilter.includes(c);return `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 4px;border-radius:6px;background:${sel?'rgba(167,139,250,0.08)':'transparent'}"><input type="checkbox" data-cat-check="${c}" ${sel?'checked':''} style="accent-color:#a78bfa;width:13px;height:13px"><span style="font-size:13px;color:${sel?'#a78bfa':'#aaa'}">${c}</span></label>`;}).join('')}`;
+          return `<div style="font-size:11px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:0.06em;padding:10px 0 6px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a78bfa;margin-right:5px;vertical-align:middle"></span>Дивиденды</div>${divCats.map(c=>{const sel=state.txCatFilter.includes(c);return `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 4px;border-radius:6px;background:${sel?'rgba(167,139,250,0.08)':'transparent'}"><input type="checkbox" data-cat-check="${c}" ${sel?'checked':''} style="accent-color:#a78bfa;width:13px;height:13px"><span style="font-size:13px;color:${sel?'#a78bfa':'#aaa'}">${c}</span></label>`;}).join('')}`;
         })()}
         <div style="display:flex;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.07)">
           <button id="cat-pick-all" style="flex:1;padding:5px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#888;font-size:11px;cursor:pointer">Все</button>
@@ -1733,7 +1733,7 @@ function txDetailModalHtml(txId) {
 
   return `
     <div class="modal-bg" id="tx-detail-bg">
-      <div class="modal" style="max-width:520px">
+      <div id="tx-detail-inner" class="modal" style="max-width:520px">
         <div class="modal-header">
           <span class="modal-title">Операция</span>
           <button class="modal-close" id="tx-detail-close">×</button>
@@ -2041,7 +2041,7 @@ function partnerPayModalHtml({ dirKey, partnerId, partnerName, isOwner }) {
 
   return `
     <div class="modal-bg" id="partner-modal-bg">
-      <div class="modal" style="max-width:420px">
+      <div id="partner-modal-inner" class="modal" style="max-width:420px">
         <div class="modal-header">
           <span class="modal-title" style="color:${titleColor}">${titleIcon} ${partnerName} · ${dir.icon} ${dir.label}</span>
           <button class="modal-close" id="partner-modal-close">×</button>
@@ -2098,7 +2098,7 @@ function partnerManageModalHtml(dirKey) {
 
   return `
     <div class="modal-bg" id="partner-manage-bg">
-      <div class="modal" style="max-width:460px">
+      <div id="partner-manage-inner" class="modal" style="max-width:460px">
         <div class="modal-header">
           <span class="modal-title">⚙️ Партнёры · ${dir.icon} ${dir.label}</span>
           <button class="modal-close" id="partner-manage-close">×</button>
@@ -2172,7 +2172,7 @@ function catEditorModalHtml() {
   }).join('');
   return `
     <div class="modal-bg" id="cat-editor-bg">
-      <div class="modal" style="max-width:420px">
+      <div id="cat-editor-inner" class="modal" style="max-width:420px">
         <div class="modal-header">
           <span class="modal-title">${title} · Все направления</span>
           <button class="modal-close" id="cat-editor-close">×</button>
@@ -2250,85 +2250,303 @@ function buildPeriodTable(allTxs, activeM) {
 }
 
 function pnlHtml() {
-  {
-    const allTxs = monthTxs().filter(t => !t.isTransfer && t.type !== 'transfer' && t.type !== 'dividend' && t.category !== 'Дивиденды собственника' && t.category !== 'Дивиденды партнёру' && t.category !== 'Дивиденды');
-    const incomeMap = {}, expenseMap = {};
-    allTxs.forEach(t => {
-      const rv = toRub(t.amount, t.currency);
-      if (t.type === 'income') incomeMap[t.category] = (incomeMap[t.category] || 0) + rv;
-      else expenseMap[t.category] = (expenseMap[t.category] || 0) + rv;
-    });
-    const totalIncome  = Object.values(incomeMap).reduce((s,v)=>s+v,0);
-    const totalExpense = Object.values(expenseMap).reduce((s,v)=>s+v,0);
+  const isMobile = !!document.getElementById('content-root');
 
-    const allIncomeCats  = getDirCats('_global', 'in').filter(c => c !== 'Перевод входящий');
-    const allExpenseCats = getDirCats('_global', 'out').filter(c => c !== 'Перевод исходящий');
-    Object.keys(incomeMap).forEach(c  => { if (!allIncomeCats.includes(c))  allIncomeCats.push(c); });
-    Object.keys(expenseMap).forEach(c => { if (!allExpenseCats.includes(c)) allExpenseCats.push(c); });
+  // ── Data ──────────────────────────────────────────────────────────
+  const allTxs = monthTxs().filter(t =>
+    !t.isTransfer && t.type !== 'transfer' && t.type !== 'dividend' &&
+    t.category !== 'Дивиденды собственника' &&
+    t.category !== 'Дивиденды партнёру' &&
+    t.category !== 'Дивиденды'
+  );
+  const incomeMap = {}, expenseMap = {};
+  allTxs.forEach(t => {
+    const rv = toRub(t.amount, t.currency);
+    if (t.type === 'income')  incomeMap[t.category]  = (incomeMap[t.category]  || 0) + rv;
+    if (t.type === 'expense') expenseMap[t.category] = (expenseMap[t.category] || 0) + rv;
+  });
+  const totalIncome  = Object.values(incomeMap).reduce((s,v)=>s+v,0);
+  const totalExpense = Object.values(expenseMap).reduce((s,v)=>s+v,0);
 
-    const incomeRows = [...allIncomeCats]
-      .map(cat => [cat, incomeMap[cat] || 0])
-      .sort((a,b) => b[1]-a[1])
-      .map(([cat,val]) => `<tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
-        <td style="padding:9px 8px;color:${val?'#ccc':'#444'};font-size:13px">${cat}</td>
-        <td style="padding:9px 8px;text-align:right;color:${val?'#6ee7b7':'#333'};font-family:monospace;font-size:13px">${val?fmt(val):'—'}</td>
-        <td style="padding:9px 8px;text-align:right;color:#555;font-size:11px">${totalIncome>0&&val?Math.round(val/totalIncome*100)+'%':''}</td>
-      </tr>`).join('');
+  const allIncomeCats  = getDirCats('_global','in').filter(c=>c!=='Перевод входящий');
+  const allExpenseCats = getDirCats('_global','out').filter(c=>c!=='Перевод исходящий');
+  Object.keys(incomeMap).forEach(c => { if (!allIncomeCats.includes(c)) allIncomeCats.push(c); });
+  Object.keys(expenseMap).forEach(c => { if (!allExpenseCats.includes(c)) allExpenseCats.push(c); });
 
-    const expenseRows = [...allExpenseCats]
-      .map(cat => [cat, expenseMap[cat] || 0])
-      .sort((a,b) => b[1]-a[1])
-      .map(([cat,val]) => `<tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
-        <td style="padding:9px 8px;color:${val?'#ccc':'#444'};font-size:13px">${cat}</td>
-        <td style="padding:9px 8px;text-align:right;color:${val?'#f87171':'#333'};font-family:monospace;font-size:13px">${val?fmt(val):'—'}</td>
-        <td style="padding:9px 8px;text-align:right;color:#555;font-size:11px">${totalExpense>0&&val?Math.round(val/totalExpense*100)+'%':''}</td>
-      </tr>`).join('');
+  const catModal     = state.showCatEditor    ? catEditorModalHtml()                           : '';
+  const partnerModal = state.showPartnerModal  ? partnerPayModalHtml(state.showPartnerModal)    : '';
+  const manageModal  = state.showPartnerManage ? partnerManageModalHtml(state.showPartnerManage): '';
 
-    const catModal    = state.showCatEditor    ? catEditorModalHtml()                                     : '';
-    const partnerModal = state.showPartnerModal  ? partnerPayModalHtml(state.showPartnerModal)            : '';
-    const manageModal  = state.showPartnerManage ? partnerManageModalHtml(state.showPartnerManage)        : '';
-    const profit = totalIncome - totalExpense;
+  const INC_COLORS = ['#6ee7b7','#a78bfa','#60a5fa','#fbbf24','#34d399','#f472b6','#fb923c','#38bdf8'];
+  const EXP_COLORS = ['#f87171','#fb923c','#facc15','#c084fc','#f472b6','#60a5fa','#a78bfa','#34d399'];
 
-    return `
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title" style="font-size:17px">${_projectEmoji} ${_projectName || 'Детализация'}</span>
-        </div>
-        <!-- Merged categories -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,0.05)">
-          <div style="background:#0d0d0d;padding:16px 12px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 8px">
-              <div style="font-size:15px;color:#6ee7b7;font-weight:700;letter-spacing:0.03em">🟢 Доходы по категориям</div>
-              <button data-cat-edit="_global" data-cat-type="in" style="padding:3px 7px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.06);color:#888;cursor:pointer;font-size:11px">⚙️</button>
-            </div>
-            <table style="width:100%"><tbody>
-              ${incomeRows || '<tr><td style="color:#555;padding:8px">Нет данных</td></tr>'}
-              <tr style="border-top:1px solid rgba(255,255,255,0.1)">
-                <td style="padding:10px 8px;font-weight:700;font-size:13px">Итого</td>
-                <td style="padding:10px 8px;text-align:right;color:#6ee7b7;font-weight:700;font-family:monospace">${fmt(totalIncome)}</td>
-                <td style="padding:10px 8px;text-align:right;color:#555;font-size:11px">100%</td>
-              </tr>
-            </tbody></table>
-          </div>
-          <div style="background:#0d0d0d;padding:16px 12px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 8px">
-              <div style="font-size:15px;color:#f87171;font-weight:700;letter-spacing:0.03em">🔴 Расходы по категориям</div>
-              <button data-cat-edit="_global" data-cat-type="out" style="padding:3px 7px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.06);color:#888;cursor:pointer;font-size:11px">⚙️</button>
-            </div>
-            <table style="width:100%"><tbody>
-              ${expenseRows || '<tr><td style="color:#555;padding:8px">Нет данных</td></tr>'}
-              <tr style="border-top:1px solid rgba(255,255,255,0.1)">
-                <td style="padding:10px 8px;font-weight:700;font-size:13px">Итого</td>
-                <td style="padding:10px 8px;text-align:right;color:#f87171;font-weight:700;font-family:monospace">${fmt(totalExpense)}</td>
-                <td style="padding:10px 8px;text-align:right;color:#555;font-size:11px">100%</td>
-              </tr>
-            </tbody></table>
-          </div>
-        </div>
-      </div>
-      ${catModal}${partnerModal}${manageModal}`;
+  // ── Donut SVG — fix: 1 segment = full circle ───────────────────────
+  function buildSegments(catMap, total, colors) {
+    return Object.entries(catMap).filter(([,v])=>v>0)
+      .sort((a,b)=>b[1]-a[1])
+      .map(([cat,val],i) => ({ pct: val/total, color: colors[i%colors.length], cat, val }));
   }
+
+  function svgDonut(segs, total, totalColor, size, r, holeR) {
+    const cx = size/2, cy = size/2;
+    const bg = '#0d0d1a';
+    const totalText = `<circle cx="${cx}" cy="${cy}" r="${holeR}" fill="${bg}"/>
+      <text x="${cx}" y="${cy-6}" text-anchor="middle" fill="#555" font-size="10">Итого</text>
+      <text x="${cx}" y="${cy+10}" text-anchor="middle" fill="${totalColor}" font-size="11" font-weight="700">${total}</text>`;
+
+    if (!segs.length) return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="${totalColor}" opacity="0.15"/>
+      ${totalText}</svg>`;
+
+    // 1 segment — full circle, no pie paths needed
+    if (segs.length === 1) return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="${segs[0].color}"/>
+      ${totalText}</svg>`;
+
+    let start = 0, paths = '';
+    segs.forEach(s => {
+      const end = start + s.pct;
+      const a1 = (start*360-90)*Math.PI/180;
+      const a2 = (end  *360-90)*Math.PI/180;
+      const x1 = cx+r*Math.cos(a1), y1 = cy+r*Math.sin(a1);
+      const x2 = cx+r*Math.cos(a2), y2 = cy+r*Math.sin(a2);
+      paths += `<path d="M ${cx},${cy} L ${x1.toFixed(2)},${y1.toFixed(2)} A ${r},${r} 0 ${s.pct>0.5?1:0},1 ${x2.toFixed(2)},${y2.toFixed(2)} Z" fill="${s.color}"/>`;
+      start = end;
+    });
+    return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${paths}${totalText}</svg>`;
+  }
+
+  // ── Category rows list ─────────────────────────────────────────────
+  function catRows(allCats, catMap, total, segs, colors) {
+    return [...allCats].sort((a,b)=>(catMap[b]||0)-(catMap[a]||0)).map((cat,i) => {
+      const val = catMap[cat]||0;
+      const seg = segs.find(s=>s.cat===cat);
+      const color = seg ? seg.color : (val ? colors[i%colors.length] : '#333');
+      const pct = total>0&&val ? Math.round(val/total*100)+'%' : '';
+      const dim = !val;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.04)${dim?';opacity:0.3':''}">
+        <span style="width:10px;height:10px;border-radius:50%;background:${dim?'#333':color};flex-shrink:0;display:inline-block"></span>
+        <span style="flex:1;font-size:14px;color:${dim?'#3a3a3a':'#ccc'}">${escapeHtml(cat)}</span>
+        <span style="font-family:monospace;font-size:13px;font-weight:600;color:${dim?'#2a2a2a':color};flex-shrink:0">${val?fmt(val):'—'}</span>
+        <span style="font-size:11px;color:#555;min-width:32px;text-align:right;flex-shrink:0">${pct}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Chart data helpers ─────────────────────────────────────────────
+  function lastNMonths(n) {
+    const keys = [...new Set(state.transactions.map(t=>getMonthKey(t.date)))].sort();
+    return keys.slice(-n);
+  }
+  function monthTotals(mk) {
+    const txs = state.transactions.filter(t =>
+      getMonthKey(t.date)===mk && !t.isTransfer && t.type!=='transfer' && t.type!=='dividend' &&
+      t.category!=='Дивиденды собственника' && t.category!=='Дивиденды партнёру'
+    );
+    const MSHORT = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+    const [,m] = mk.split('-');
+    return {
+      label: MSHORT[parseInt(m)-1],
+      inc: txs.filter(t=>t.type==='income').reduce((s,t)=>s+toRub(t.amount,t.currency),0),
+      exp: txs.filter(t=>t.type==='expense').reduce((s,t)=>s+toRub(t.amount,t.currency),0)
+    };
+  }
+
+  // ── Balance area chart ─────────────────────────────────────────────
+  function svgBalance(W, H) {
+    const txs = [...monthTxs()].filter(t=>t.type==='income'||t.type==='expense').sort((a,b)=>a.date.localeCompare(b.date));
+    if (txs.length < 2) return `<p style="text-align:center;color:#444;padding:36px 0;font-size:13px">Недостаточно данных</p>`;
+    const dm = {};
+    txs.forEach(t => { const rv=toRub(t.amount,t.currency); dm[t.date]=(dm[t.date]||0)+(t.type==='income'?rv:-rv); });
+    const dates=Object.keys(dm).sort(); let run=0;
+    const pts=dates.map(d=>{run+=dm[d];return{d,v:run};});
+    const vals=pts.map(p=>p.v), minV=Math.min(...vals), maxV=Math.max(...vals), rng=maxV-minV||1;
+    const pL=22,pR=10,pT=22,pB=16, vW=W-pL-pR, vH=H-pT-pB;
+    const px=i=>pL+i*(vW/(pts.length-1||1));
+    const py=v=>pT+(1-(v-minV)/rng)*vH;
+    const line=pts.map((p,i)=>(i?'L':'M')+px(i).toFixed(1)+','+py(p.v).toFixed(1)).join(' ');
+    const fill=line+` L${px(pts.length-1).toFixed(1)},${H-pB} L${pL},${H-pB} Z`;
+    const uid='b'+Math.random().toString(36).slice(2,6);
+    // Y labels
+    const fmtK=v=>{const a=Math.abs(v);return a>=1e6?(v/1e6).toFixed(1)+'M':a>=1e3?Math.round(v/1e3)+'K':Math.round(v)+'';};
+    const yL=[maxV,(maxV+minV)/2,minV].map(v=>`<text x="${pL-2}" y="${py(v)+3}" fill="#3a3a3a" font-size="8" text-anchor="end">${fmtK(v)}</text>`).join('');
+    // X labels — 5 evenly spaced
+    const step=Math.max(1,Math.floor((pts.length-1)/4));
+    const xi=[0,step,step*2,step*3,pts.length-1].filter((v,i,a)=>a.indexOf(v)===i&&v<pts.length);
+    const xL=xi.map(i=>`<text x="${px(i).toFixed(1)}" y="${H+3}" text-anchor="middle" fill="#444" font-size="9">${pts[i].d.slice(5)}</text>`).join('');
+    // Dots
+    const dots=xi.map(i=>`<circle cx="${px(i).toFixed(1)}" cy="${py(pts[i].v).toFixed(1)}" r="4" fill="#a78bfa" stroke="#0a0a14" stroke-width="2" style="cursor:pointer"
+      onclick="var t=document.getElementById('tt_${uid}');t.style.display='block';t.innerHTML='<div style=font-size:10px;color:#666;margin-bottom:2px>${pts[i].d}</div>${escapeHtml(fmt(pts[i].v))}'"/>
+      <circle cx="${px(i).toFixed(1)}" cy="${py(pts[i].v).toFixed(1)}" r="8" fill="rgba(167,139,250,0.2)"/>`).join('');
+    return `<div style="position:relative">
+<svg width="100%" height="${H+16}" viewBox="0 0 ${W} ${H+16}" style="overflow:visible">
+  <defs><linearGradient id="g${uid}" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.3"/>
+    <stop offset="100%" stop-color="#a78bfa" stop-opacity="0"/>
+  </linearGradient></defs>
+  <line x1="${pL}" y1="${pT}" x2="${W-pR}" y2="${pT}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+  <line x1="${pL}" y1="${pT+vH/2}" x2="${W-pR}" y2="${pT+vH/2}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+  <line x1="${pL}" y1="${H-pB}" x2="${W-pR}" y2="${H-pB}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+  ${yL}
+  <path d="${fill}" fill="url(#g${uid})"/>
+  <path d="${line}" fill="none" stroke="#a78bfa" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+  ${dots}${xL}
+</svg>
+<div id="tt_${uid}" style="display:none;position:absolute;top:4px;right:4px;background:#1a1a2e;border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:7px 12px;font-size:12px;font-weight:600;color:#a78bfa;pointer-events:none;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,0.5)"></div>
+</div>`;
+  }
+
+  // ── Line chart (income vs expense) ────────────────────────────────
+  function svgLine(W, H) {
+    const months=lastNMonths(6); if(!months.length) return `<p style="text-align:center;color:#444;padding:36px 0;font-size:13px">Нет данных</p>`;
+    const data=months.map(monthTotals);
+    const pL=10,pR=10,pT=20,pB=16, vW=W-pL-pR, vH=H-pT-pB;
+    const maxV=Math.max(...data.map(d=>Math.max(d.inc,d.exp)),1);
+    const n=data.length;
+    const px=i=>pL+i*(vW/(n-1||1)); const py=v=>pT+(1-v/maxV)*vH;
+    const iL=data.map((d,i)=>(i?'L':'M')+px(i).toFixed(1)+','+py(d.inc).toFixed(1)).join(' ');
+    const eL=data.map((d,i)=>(i?'L':'M')+px(i).toFixed(1)+','+py(d.exp).toFixed(1)).join(' ');
+    const iF=iL+` L${px(n-1).toFixed(1)},${H-pB} L${pL},${H-pB} Z`;
+    const eF=eL+` L${px(n-1).toFixed(1)},${H-pB} L${pL},${H-pB} Z`;
+    const uid='l'+Math.random().toString(36).slice(2,6);
+    const dots=data.map((d,i)=>`
+      <circle cx="${px(i).toFixed(1)}" cy="${py(d.inc).toFixed(1)}" r="3.5" fill="#6ee7b7" stroke="#0a0a14" stroke-width="2" style="cursor:pointer"
+        onclick="var t=document.getElementById('tt_${uid}');t.style.display='block';t.innerHTML='<div class=tdate>${escapeHtml(d.label)}</div><span style=color:#6ee7b7>&#8593; ${escapeHtml(fmt(d.inc))}</span><br><span style=color:#f87171>&#8595; ${escapeHtml(fmt(d.exp))}</span>'"/>
+      <circle cx="${px(i).toFixed(1)}" cy="${py(d.exp).toFixed(1)}" r="3.5" fill="#f87171" stroke="#0a0a14" stroke-width="2" style="cursor:pointer"
+        onclick="var t=document.getElementById('tt_${uid}');t.style.display='block';t.innerHTML='<div class=tdate>${escapeHtml(d.label)}</div><span style=color:#6ee7b7>&#8593; ${escapeHtml(fmt(d.inc))}</span><br><span style=color:#f87171>&#8595; ${escapeHtml(fmt(d.exp))}</span>'"/ >`).join('');
+    const xL=data.map((d,i)=>`<text x="${px(i).toFixed(1)}" y="${H+3}" text-anchor="middle" fill="#444" font-size="9">${d.label}</text>`).join('');
+    // cursor line at last point
+    const lastX=px(n-1).toFixed(1);
+    return `<div style="position:relative">
+<svg width="100%" height="${H+16}" viewBox="0 0 ${W} ${H+16}" style="overflow:visible">
+  <defs>
+    <linearGradient id="gi${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6ee7b7" stop-opacity="0.2"/><stop offset="100%" stop-color="#6ee7b7" stop-opacity="0"/></linearGradient>
+    <linearGradient id="ge${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f87171" stop-opacity="0.15"/><stop offset="100%" stop-color="#f87171" stop-opacity="0"/></linearGradient>
+  </defs>
+  <line x1="${pL}" y1="${pT}" x2="${W-pR}" y2="${pT}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+  <line x1="${pL}" y1="${pT+vH/2}" x2="${W-pR}" y2="${pT+vH/2}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+  <line x1="${pL}" y1="${H-pB}" x2="${W-pR}" y2="${H-pB}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+  <path d="${iF}" fill="url(#gi${uid})"/>
+  <path d="${eF}" fill="url(#ge${uid})"/>
+  <path d="${iL}" fill="none" stroke="#6ee7b7" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="${eL}" fill="none" stroke="#f87171" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <line x1="${lastX}" y1="${pT-5}" x2="${lastX}" y2="${H-pB}" stroke="rgba(255,255,255,0.1)" stroke-width="1" stroke-dasharray="4 3"/>
+  ${dots}${xL}
+</svg>
+<div id="tt_${uid}" style="display:none;position:absolute;top:8px;right:4px;background:#1a1a2e;border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:7px 12px;font-size:12px;color:#fff;line-height:1.6;pointer-events:none;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,0.5)"><style scoped>.tdate{font-size:10px;color:#666;margin-bottom:2px}</style></div>
+</div>`;
+  }
+
+  // ── Bar chart ──────────────────────────────────────────────────────
+  function svgBar(W, H) {
+    const months=lastNMonths(6); if(!months.length) return `<p style="text-align:center;color:#444;padding:36px 0;font-size:13px">Нет данных</p>`;
+    const data=months.map(monthTotals);
+    const pL=10,pR=10,pT=20,pB=16, vW=W-pL-pR, vH=H-pT-pB;
+    const maxV=Math.max(...data.map(d=>Math.max(d.inc,d.exp)),1);
+    const n=data.length, slotW=vW/n, bW=Math.min(slotW*0.32,18);
+    const uid='r'+Math.random().toString(36).slice(2,6);
+    // Find current month
+    const curMk = state.activeMonth || getMonthKey(new Date().toISOString().slice(0,10));
+    const bars=data.map((d,i)=>{
+      const mk=lastNMonths(6)[i];
+      const isCur=mk===curMk;
+      const cx=pL+i*slotW+slotW/2;
+      const iH=(d.inc/maxV)*vH, eH=(d.exp/maxV)*vH;
+      const oc=`onclick="var t=document.getElementById('tt_${uid}');t.style.display='block';t.innerHTML='<div style=font-size:10px;color:#666;margin-bottom:2px>${escapeHtml(d.label)}</div><span style=color:#6ee7b7>&#8593; ${escapeHtml(fmt(d.inc))}</span><br><span style=color:#f87171>&#8595; ${escapeHtml(fmt(d.exp))}</span>'"`;
+      return `
+        <rect x="${(cx-bW-1).toFixed(1)}" y="${(pT+vH-iH).toFixed(1)}" width="${bW}" height="${iH.toFixed(1)}" rx="4" fill="#6ee7b7" opacity="${isCur?'1':'0.7'}" style="cursor:pointer" ${oc}/>
+        <rect x="${(cx+1).toFixed(1)}" y="${(pT+vH-eH).toFixed(1)}" width="${bW}" height="${eH.toFixed(1)}" rx="4" fill="#f87171" opacity="${isCur?'1':'0.7'}" style="cursor:pointer" ${oc}/>
+        <text x="${cx.toFixed(1)}" y="${H+3}" text-anchor="middle" fill="${isCur?'#aaa':'#444'}" font-size="${isCur?'10':'9'}" font-weight="${isCur?'700':'400'}">${d.label}</text>`;
+    }).join('');
+    return `<div style="position:relative">
+<svg width="100%" height="${H+16}" viewBox="0 0 ${W} ${H+16}" style="overflow:visible">
+  <line x1="${pL}" y1="${pT}" x2="${W-pR}" y2="${pT}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+  <line x1="${pL}" y1="${pT+vH/2}" x2="${W-pR}" y2="${pT+vH/2}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+  <line x1="${pL}" y1="${H-pB}" x2="${W-pR}" y2="${H-pB}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+  ${bars}
+</svg>
+<div id="tt_${uid}" style="display:none;position:absolute;top:4px;right:4px;background:#1a1a2e;border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:7px 12px;font-size:12px;color:#fff;line-height:1.6;pointer-events:none;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,0.5)"></div>
+</div>`;
+  }
+
+  // ── Section wrappers — exact mockup style ─────────────────────────
+  // chart-section: background rgba(255,255,255,0.02), border rgba(255,255,255,0.06), border-radius 18px
+  const CS = 'background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:18px;overflow:hidden;margin-bottom:14px';
+
+  function chartHeader(title, gearType) {
+    const gear = gearType
+      ? `<button data-cat-edit="_global" data-cat-type="${gearType}" style="width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#555;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0">⚙</button>`
+      : '';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 0">${title}${gear}</div>`;
+  }
+
+  function chartTitleSpan(label, dotColor) {
+    const dot = dotColor ? `<span style="width:10px;height:10px;border-radius:50%;background:${dotColor};display:inline-block;flex-shrink:0"></span> ` : '';
+    return `<span style="font-size:13px;font-weight:700;color:#ccc;text-transform:uppercase;letter-spacing:0.06em">${dot}${label}</span>`;
+  }
+
+  function legendBar(items) {
+    return `<div style="display:flex;gap:16px;padding:6px 16px 0">${items.map(([c,l])=>`<span style="display:flex;align-items:center;gap:6px;font-size:11px;color:#888"><span style="width:8px;height:8px;border-radius:50%;background:${c};display:inline-block"></span>${l}</span>`).join('')}</div>`;
+  }
+
+  function chartWrapDiv(inner) {
+    return `<div style="padding:12px 16px 16px;position:relative">${inner}</div>`;
+  }
+
+  function totalFooter(val, color) {
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02)">
+      <span style="font-size:13px;font-weight:700;color:#888">Итого</span>
+      <span style="font-size:15px;font-weight:700;font-family:monospace;color:${color}">${fmt(val)}</span>
+    </div>`;
+  }
+
+  // ── Donut + list block ─────────────────────────────────────────────
+  function donutBlock(allCats, catMap, total, colors, accent, label, catType, size, r, holeR, isMob) {
+    const segs = buildSegments(catMap, total, colors);
+    const donut = svgDonut(segs, fmt(total), accent, size, r, holeR);
+    const rows  = catRows(allCats, catMap, total, segs, colors);
+    const hdr   = chartHeader(chartTitleSpan(label, accent), catType);
+    if (isMob) {
+      return `<div style="${CS}">
+        ${hdr}
+        <div style="display:flex;justify-content:center;padding:16px 16px 12px">${donut}</div>
+        <div style="height:1px;background:rgba(255,255,255,0.05);margin:0 16px"></div>
+        <div style="height:280px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain">${rows}</div>
+        ${totalFooter(total, accent)}
+      </div>`;
+    }
+    return `<div style="${CS};margin-bottom:0">
+      ${hdr}
+      <div style="display:flex;align-items:flex-start;padding:14px 16px;gap:0">
+        <div style="flex-shrink:0">${donut}</div>
+        <div style="flex:1;overflow-y:auto;max-height:200px;padding-left:14px">${rows}</div>
+      </div>
+      ${totalFooter(total, accent)}
+    </div>`;
+  }
+
+  // ── MOBILE ─────────────────────────────────────────────────────────
+  if (isMobile) {
+    const balHtml  = `<div style="${CS}">${chartHeader(chartTitleSpan('График баланса',null), null)}${chartWrapDiv(svgBalance(340,140))}</div>`;
+    const incHtml  = donutBlock(allIncomeCats, incomeMap, totalIncome, INC_COLORS, '#6ee7b7', 'Доходы по категориям', 'in', 180, 75, 46, true);
+    const expHtml  = donutBlock(allExpenseCats, expenseMap, totalExpense, EXP_COLORS, '#f87171', 'Расходы по категориям', 'out', 180, 75, 46, true);
+    const lineHtml = `<div style="${CS}">${chartHeader(chartTitleSpan('Линейный график',null), null)}${legendBar([['#6ee7b7','Доходы'],['#f87171','Расходы']])}${chartWrapDiv(svgLine(340,130))}</div>`;
+    const barHtml  = `<div style="${CS}">${chartHeader(chartTitleSpan('Столбчатая диаграмма',null), null)}${legendBar([['#6ee7b7','Доходы'],['#f87171','Расходы']])}${chartWrapDiv(svgBar(340,130))}</div>`;
+    return `<div style="padding:16px 16px 80px">${balHtml}${incHtml}${expHtml}${lineHtml}${barHtml}${catModal}${partnerModal}${manageModal}</div>`;
+  }
+
+  // ── DESKTOP ────────────────────────────────────────────────────────
+  const incHtml  = donutBlock(allIncomeCats, incomeMap, totalIncome, INC_COLORS, '#6ee7b7', 'Доходы по категориям', 'in', 160, 68, 42, false);
+  const expHtml  = donutBlock(allExpenseCats, expenseMap, totalExpense, EXP_COLORS, '#f87171', 'Расходы по категориям', 'out', 160, 68, 42, false);
+  const balHtml  = `<div style="${CS};margin-bottom:0">${chartHeader(chartTitleSpan('График баланса',null), null)}${chartWrapDiv(svgBalance(340,150))}</div>`;
+  const lineHtml = `<div style="${CS};margin-bottom:0">${chartHeader(chartTitleSpan('Линейный график',null), null)}${legendBar([['#6ee7b7','Доходы'],['#f87171','Расходы']])}${chartWrapDiv(svgLine(340,130))}</div>`;
+  const barHtml  = `<div style="${CS};margin-bottom:0">${chartHeader(chartTitleSpan('Столбчатая диаграмма',null), null)}${legendBar([['#6ee7b7','Доходы'],['#f87171','Расходы']])}${chartWrapDiv(svgBar(340,130))}</div>`;
+  return `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">${incHtml}${expHtml}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">${balHtml}${lineHtml}${barHtml}</div>
+    ${catModal}${partnerModal}${manageModal}`;
 }
+
 
 // ── FUNDS ──
 function fundsHtml() {
@@ -2379,7 +2597,7 @@ function addDirModalHtml() {
   const colors = ['#6ee7b7','#93c5fd','#fbbf24','#f87171','#a78bfa','#fb923c','#34d399','#e879f9'];
   return `
     <div class="modal-bg" id="add-dir-modal-bg">
-      <div class="modal" style="max-width:420px">
+      <div id="add-dir-inner" class="modal" style="max-width:420px">
         <div class="modal-header">
           <span class="modal-title">+ Новое направление</span>
           <button class="modal-close" id="add-dir-close">×</button>
@@ -2418,7 +2636,7 @@ function editDirModalHtml() {
   const allAccounts = getOrderedAccounts().map(k => [k, state.accounts[k]]);
   return `
     <div class="modal-bg" id="edit-dir-modal-bg">
-      <div class="modal" style="max-width:440px">
+      <div id="edit-dir-inner" class="modal" style="max-width:440px">
         <div class="modal-header">
           <span class="modal-title">⚙️ Настройки направления</span>
           <button class="modal-close" id="edit-dir-close">×</button>
@@ -2472,7 +2690,7 @@ function addAccModalHtml() {
   const f = state.addAccForm;
   return `
     <div class="modal-bg" id="add-acc-modal-bg">
-      <div class="modal" style="max-width:420px">
+      <div id="m-add-acc-inner" class="modal" style="max-width:420px">
         <div class="modal-header">
           <span class="modal-title">+ Новый счёт</span>
           <button class="modal-close" id="add-acc-close">×</button>
@@ -2514,7 +2732,7 @@ function editAccModalHtml() {
   const nameOnly = a.name?.replace(/^\S+\s/, '') || a.name || '';
   return `
     <div class="modal-bg" id="edit-acc-modal-bg">
-      <div class="modal" style="max-width:420px">
+      <div id="m-edit-acc-inner" class="modal" style="max-width:420px">
         <div class="modal-header">
           <span class="modal-title">⚙️ Настройки счёта</span>
           <button class="modal-close" id="edit-acc-close">×</button>
@@ -2559,7 +2777,7 @@ function accModalHtml() {
   const today = state.activeMonth ? `${state.activeMonth}-${new Date().getDate().toString().padStart(2,'0')}` : _localDateStr();
   return `
     <div class="modal-bg" id="acc-modal-bg">
-      <div class="modal" style="max-width:440px">
+      <div id="acc-modal-inner" class="modal" style="max-width:440px">
         <div class="modal-header">
           <span class="modal-title">🔄 Перевод</span>
           <button class="modal-close" id="acc-modal-close">×</button>
@@ -2611,7 +2829,7 @@ function addFundModalHtml() {
   const colors = ['#6ee7b7','#93c5fd','#fbbf24','#f87171','#a78bfa','#fb923c','#34d399','#e879f9'];
   return `
     <div class="modal-bg" id="add-fund-modal-bg">
-      <div class="modal" style="max-width:400px">
+      <div id="m-add-fund-inner" class="modal" style="max-width:400px">
         <div class="modal-header">
           <span class="modal-title">+ Новый фонд</span>
           <button class="modal-close" id="add-fund-close">×</button>
@@ -2653,7 +2871,7 @@ function editFundModalHtml() {
   const colors = ['#6ee7b7','#93c5fd','#fbbf24','#f87171','#a78bfa','#fb923c','#34d399','#e879f9'];
   return `
     <div class="modal-bg" id="edit-fund-modal-bg">
-      <div class="modal" style="max-width:400px">
+      <div id="m-edit-fund-inner" class="modal" style="max-width:400px">
         <div class="modal-header">
           <span class="modal-title">⚙️ Настройки фонда</span>
           <button class="modal-close" id="edit-fund-close">×</button>
@@ -2695,7 +2913,7 @@ function fundModalHtml() {
   const allAccounts = getOrderedAccounts().map(k => [k, state.accounts[k]]);
   return `
     <div class="modal-bg" id="fund-modal-bg">
-      <div class="modal" style="max-width:420px">
+      <div id="fund-modal-inner" class="modal" style="max-width:420px">
         <div class="modal-header">
           <span class="modal-title">${f.type==='in'?'💚 Пополнить фонд':'🔴 Вывести из фонда'}</span>
           <button class="modal-close" id="fund-modal-close">×</button>
@@ -2760,7 +2978,7 @@ function modalHtml() {
 
   return `
     <div class="modal-bg" id="modal-bg">
-      <div class="modal">
+      <div id="new-tx-inner" class="modal">
         <div class="modal-header">
           <span class="modal-title">Новая операция</span>
           <button class="modal-close" id="modal-close">×</button>
@@ -2773,7 +2991,7 @@ function modalHtml() {
                 <option value="income"   ${f.type==='income'   ?'selected':''}>🟢 Доход</option>
                 <option value="expense"  ${f.type==='expense'  ?'selected':''}>🔴 Расход</option>
                 <option value="transfer" ${f.type==='transfer' ?'selected':''}>🟡 Перевод</option>
-                <option value="dividend" ${f.type==='dividend' ?'selected':''}>🟣 Дивиденды</option>
+                <option value="dividend" ${f.type==='dividend' ?'selected':''}><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a78bfa;margin-right:5px;vertical-align:middle"></span>Дивиденды</option>
               </select>
             </div>
             <div>
@@ -2901,7 +3119,7 @@ function projectSwitcherHtml() {
   if (_projSwitcherMode === 'create') {
     return `
     <div class="modal-bg" id="project-switcher-bg">
-      <div class="modal" style="max-width:430px;padding:32px">
+      <div id="m-projects-inner" class="modal" style="max-width:430px;padding:32px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
           <span style="font-size:16px;font-weight:700;color:#fff">＋ Новый проект</span>
           <button class="modal-close" id="project-switcher-close">×</button>
@@ -2932,7 +3150,7 @@ function projectSwitcherHtml() {
     const proj = projects.find(p => p.id === _projSettingsId) || {};
     return `
     <div class="modal-bg" id="project-switcher-bg">
-      <div class="modal" style="max-width:430px;padding:32px">
+      <div id="m-projects-inner" class="modal" style="max-width:430px;padding:32px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
           <span style="font-size:16px;font-weight:700;color:#fff">⚙️ Настройки проекта</span>
           <button class="modal-close" id="project-switcher-close">×</button>
@@ -2975,7 +3193,7 @@ function projectSwitcherHtml() {
 
   return `
     <div class="modal-bg" id="project-switcher-bg">
-      <div class="modal" style="max-width:430px">
+      <div id="m-projects-inner" class="modal" style="max-width:430px">
         <div class="modal-header">
           <span class="modal-title">🗂 Проекты</span>
           <button class="modal-close" id="project-switcher-close">×</button>
@@ -3009,7 +3227,7 @@ function periodModalHtml() {
 
   return `
     <div class="modal-bg" id="period-modal-bg">
-      <div class="modal" style="max-width:400px">
+      <div id="m-period-inner" class="modal" style="max-width:400px">
         <div class="modal-header">
           <span class="modal-title">📅 Выбор периода</span>
           <button class="modal-close" id="period-modal-close">×</button>
@@ -3062,7 +3280,7 @@ function ratesModalHtml() {
     : `<div style="background:rgba(110,231,183,0.06);border:1px solid rgba(110,231,183,0.15);border-radius:10px;padding:10px 14px;font-size:12px;color:#6ee7b7">✓ Курсы актуальны · Обновлено: ${upd}</div>`;
   return `
     <div class="modal-bg" id="rates-bg">
-      <div class="modal" style="max-width:360px">
+      <div id="rates-inner" class="modal" style="max-width:360px">
         <div class="modal-header">
           <span class="modal-title">💱 Курсы валют</span>
           <button class="modal-close" id="rates-close">×</button>
@@ -3095,7 +3313,7 @@ function ratesModalHtml() {
 function modePickerHtml() {
   return `
     <div class="mode-picker-bg" id="mode-picker-bg">
-      <div class="mode-picker">
+      <div id="mode-picker-inner" class="mode-picker">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
           <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:-0.02em">+ Новая операция</div>
           <button id="mode-picker-close" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#666;font-size:20px;cursor:pointer;padding:4px 10px;line-height:1">×</button>
@@ -3270,7 +3488,7 @@ function formatAiText(text) {
 
   return `
     <div class="ai-chat-bg" id="ai-chat-bg">
-      <div class="ai-chat-wrap">
+      <div class="ai-chat-wrap" id="ai-chat-wrap-inner">
         <div class="ai-chat-header">
           <div class="ai-chat-title">🤖 <span>AI-помощник по операциям</span></div>
           <div style="display:flex;gap:8px;align-items:center">
@@ -3306,7 +3524,7 @@ function aiEditModalHtml() {
   const catsOut = getDirCats(dirKey,'out').map(cat=>`<option value="${cat}" ${tx.category===cat?'selected':''}>${cat}</option>`).join('');
   const ddsCats = CATEGORIES_DDS.map(cat=>`<option value="${cat}" ${tx.category===cat?'selected':''}>${cat}</option>`).join('');
   return `<div id="ai-edit-modal-bg" style="position:absolute;inset:0;background:rgba(0,0,0,0.88);backdrop-filter:blur(8px);z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;border-radius:24px" data-ai-edit-cancel>
-    <div style="background:#111;border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:24px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto">
+    <div id="ai-edit-inner" style="background:#111;border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:24px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
         <span style="font-size:16px;font-weight:700;color:#fff">✏️ Операция #${idx+1}</span>
         <button data-ai-edit-cancel style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#666;font-size:18px;cursor:pointer;padding:2px 10px">×</button>
@@ -5782,7 +6000,7 @@ function profileModalHtml() {
   const createdStr = created ? (created.getDate() + ' ' + months[created.getMonth()] + ' ' + created.getFullYear()) : '—';
   return `
     <div class="modal-bg" id="profile-modal-bg" style="align-items:center">
-      <div class="modal" style="max-width:420px">
+      <div id="m-profile-inner" class="modal" style="max-width:420px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px">
           <div style="font-size:20px;font-weight:800;color:#fff">👤 Личный кабинет</div>
           <button id="btn-profile-close" class="modal-close" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#666;font-size:20px;cursor:pointer;padding:4px 10px;line-height:1">×</button>
