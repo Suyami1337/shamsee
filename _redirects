@@ -1,5 +1,4 @@
 /login        /auth-mockup.html    200
 /onboarding   /onboarding.html     200
-/dashboard    /finance.html        200
 /reset        /reset-password.html 200
 /             /auth-mockup.html    200
