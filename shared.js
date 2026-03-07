@@ -153,11 +153,11 @@ function confirmAsync(msg, opts = {}) {
 
 function showToast(msg, type) {
   // type: 'success' | 'error' | 'info' (default)
+  const isMobile = !!document.getElementById('content-root');
   let el = document.getElementById('_toast_indicator');
   if (!el) {
     el = document.createElement('div');
     el.id = '_toast_indicator';
-    el.style.cssText = 'position:fixed;bottom:60px;right:20px;z-index:99999;padding:10px 16px;border-radius:11px;font-size:13px;font-weight:500;line-height:1.4;max-width:320px;transition:opacity 0.3s;pointer-events:none;opacity:0;white-space:pre-line';
     document.body.appendChild(el);
   }
   clearTimeout(el._timer);
@@ -166,25 +166,31 @@ function showToast(msg, type) {
     error:   'background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171',
     info:    'background:rgba(148,163,184,0.15);border:1px solid rgba(148,163,184,0.25);color:#cbd5e1',
   };
-  el.style.cssText += ';' + (styles[type] || styles.info) + ';opacity:1';
+  const position = isMobile
+    ? 'top:16px;left:50%;transform:translateX(-50%);bottom:auto;right:auto;width:calc(100vw - 40px);text-align:center'
+    : 'bottom:60px;right:20px;max-width:320px';
+  el.style.cssText = 'position:fixed;' + position + ';z-index:99999;padding:12px 18px;border-radius:12px;font-size:14px;font-weight:600;line-height:1.4;transition:opacity 0.3s,transform 0.3s;pointer-events:none;white-space:pre-line;box-shadow:0 4px 24px rgba(0,0,0,0.4);opacity:1;' + (styles[type] || styles.info);
   el.textContent = msg;
   el._timer = setTimeout(() => { el.style.opacity = '0'; }, type === 'error' ? 4000 : 2500);
 }
 
 function showSaveIndicator(status) {
+  const isMobile = !!document.getElementById('content-root');
   let el = document.getElementById('_save_indicator');
   if (!el) {
     el = document.createElement('div');
     el.id = '_save_indicator';
-    el.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9999;padding:7px 14px;border-radius:10px;font-size:12px;font-weight:600;transition:opacity 0.4s;pointer-events:none;opacity:0';
     document.body.appendChild(el);
   }
   clearTimeout(el._timer);
+  const position = isMobile
+    ? 'bottom:90px;left:0;right:0;margin:0 auto;width:fit-content;white-space:nowrap'
+    : 'bottom:20px;right:20px';
   if (status === 'ok') {
-    el.style.cssText += ';background:rgba(110,231,183,0.15);border:1px solid rgba(110,231,183,0.3);color:#6ee7b7;opacity:1';
+    el.style.cssText = 'position:fixed;' + position + ';z-index:9999;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:600;transition:opacity 0.4s;pointer-events:none;background:rgba(110,231,183,0.15);border:1px solid rgba(110,231,183,0.3);color:#6ee7b7;opacity:1;box-shadow:0 4px 16px rgba(0,0,0,0.3)';
     el.textContent = '✓ Сохранено';
   } else {
-    el.style.cssText += ';background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;opacity:1';
+    el.style.cssText = 'position:fixed;' + position + ';z-index:9999;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:600;transition:opacity 0.4s;pointer-events:none;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;opacity:1;box-shadow:0 4px 16px rgba(0,0,0,0.3)';
     el.textContent = '⚠ Ошибка сохранения';
   }
   el._timer = setTimeout(() => { el.style.opacity = '0'; }, 2000);
@@ -269,6 +275,8 @@ let state = {
   showPartnerManage: null, // dirKey
   showEditTxModal: null, // tx id
   showTxDetail: null, // tx id
+  showDeleteConfirm: false,
+  _pendingDeleteTxId: null,
   showExportModal: false,
   showSettingsModal: false,
   showProfileModal: false,
@@ -703,6 +711,20 @@ function render() {
     _appRoot().innerHTML = bodyHtml();
     bindEvents();
     renderCharts();
+    // Delete confirm — rendered in separate root on top of everything
+    let _confirmRoot = document.getElementById('delete-confirm-root');
+    if (!_confirmRoot) {
+      _confirmRoot = document.createElement('div');
+      _confirmRoot.id = 'delete-confirm-root';
+      document.body.appendChild(_confirmRoot);
+    }
+    if (state.showDeleteConfirm) {
+      _confirmRoot.innerHTML = deleteConfirmModalHtml();
+      _confirmRoot.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;pointer-events:all';
+    } else {
+      _confirmRoot.innerHTML = '';
+      _confirmRoot.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;pointer-events:none';
+    }
   } catch(e) {
     console.error('RENDER ERROR:', e);
     _appRoot().innerHTML = '<div style="color:red;padding:40px;font-family:monospace">Ошибка рендера: ' + e.message + '<br><br>' + e.stack + '</div>';
@@ -1314,11 +1336,23 @@ function _saveEditedTx() {
   const newCur    = g('etx-currency')|| tx.currency;
   const newAmtRaw = g('etx-amount');
   const newAmt    = newAmtRaw ? parseFloat(newAmtRaw) : parseFloat(tx.amount)||0;
-  // reverse old balance
+  // reverse old balance first (to get real current balance)
   const oldAcc = state.accounts[tx.account];
   if (oldAcc && (tx.type==='income'||tx.type==='expense')) {
     if (tx.type==='income') oldAcc.balance -= parseFloat(tx.amount)||0;
     else                    oldAcc.balance += parseFloat(tx.amount)||0;
+  }
+  // check balance before applying new expense
+  if (newType === 'expense') {
+    const checkAcc = state.accounts[newAcc];
+    if (checkAcc && checkAcc.balance < newAmt) {
+      // restore old balance and abort
+      if (oldAcc && (tx.type==='income'||tx.type==='expense')) {
+        if (tx.type==='income') oldAcc.balance += parseFloat(tx.amount)||0;
+        else                    oldAcc.balance -= parseFloat(tx.amount)||0;
+      }
+      showToast('Недостаточно средств на счёте', 'error'); return;
+    }
   }
   // apply new balance
   const newAccObj = state.accounts[newAcc];
@@ -1471,12 +1505,12 @@ function transactionsHtml() {
       <button id="btn-export-excel" style="padding:6px 14px;border-radius:9px;border:1px solid rgba(110,231,183,0.3);background:rgba(110,231,183,0.07);color:#6ee7b7;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap">📊 Выгрузить Excel</button>
       <div style="position:relative;display:flex;align-items:center">
         <input id="tx-search" type="text" placeholder="🔍 Поиск..." value="${state.txSearch||''}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:6px 30px 6px 12px;color:#ccc;font-size:13px;width:160px;outline:none">
-        ${state.txSearch ? `<button onclick="state.txSearch='';render()" style="position:absolute;right:8px;background:none;border:none;color:#666;cursor:pointer;font-size:14px;line-height:1;padding:0">×</button>` : ''}
+        ${state.txSearch ? `<button onclick="state.txSearch='';render()" style="position:absolute;right:0;top:0;bottom:0;width:36px;background:none;border:none;color:#aaa;cursor:pointer;font-size:18px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center">×</button>` : ''}
       </div>
       <button id="btn-adv-filter" style="padding:6px 12px;border-radius:10px;border:1px solid ${hasAdvFilter?'rgba(167,139,250,0.5)':'rgba(255,255,255,0.1)'};background:${hasAdvFilter?'rgba(167,139,250,0.12)':'rgba(255,255,255,0.04)'};color:${hasAdvFilter?'#a78bfa':'#666'};cursor:pointer;font-size:12px;white-space:nowrap">+ Фильтр${hasAdvFilter?' ●':''}</button>
     </div>
   </div>
-  ${state.showTxAdvFilter ? `<div style="padding:8px 16px 12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;border-bottom:1px solid rgba(255,255,255,0.05)">
+  ${state.showTxAdvFilter ? `<div style="padding:8px 16px 12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;border-top:1px solid rgba(255,255,255,0.05)">
     <div style="position:relative">
       <button id="btn-cat-picker" style="padding:6px 12px;border-radius:10px;border:1px solid ${(state.txCatFilter&&state.txCatFilter.length)?'rgba(167,139,250,0.5)':'rgba(255,255,255,0.1)'};background:${(state.txCatFilter&&state.txCatFilter.length)?'rgba(167,139,250,0.12)':'rgba(255,255,255,0.04)'};color:${(state.txCatFilter&&state.txCatFilter.length)?'#a78bfa':'#666'};cursor:pointer;font-size:12px;white-space:nowrap">
         🏷 Категории${(state.txCatFilter&&state.txCatFilter.length)?' ('+state.txCatFilter.length+')':''}
@@ -1691,7 +1725,7 @@ function txDetailModalHtml(txId) {
 
   function row(label, value) {
     if (!value && value !== 0) return '';
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.07)">
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid rgba(255,255,255,0.07)">
       <span style="font-size:13px;color:#555;flex-shrink:0;margin-right:24px">${label}</span>
       <span style="font-size:13px;color:#ccc;text-align:right">${value}</span>
     </div>`;
@@ -1743,9 +1777,8 @@ function txDetailModalHtml(txId) {
       row('Категория', t.category),
       t.note ? row('Комментарий', t.note) : '',
       row('Дата операции', dateFormatted),
-      '<div style="height:1px;background:rgba(255,255,255,0.04);margin:4px 0"></div>',
       row('Добавлена', fmtDateTime(t.createdAtMs || t.createdAt)),
-      t.updatedAtMs ? row('Изменена', fmtDateTime(t.updatedAtMs)) : row('Изменена', '—'),
+      t.updatedAtMs ? row('Изменена', fmtDateTime(t.updatedAtMs)) : '',
     ].join('');
   } else {
     const acc = state.accounts[t.account];
@@ -1770,9 +1803,8 @@ function txDetailModalHtml(txId) {
       t.note ? row('Комментарий', t.note) : '',
       row('Дата операции', dateFormatted),
       row('Счёт', accName),
-      '<div style="height:1px;background:rgba(255,255,255,0.04);margin:4px 0"></div>',
       row('Добавлена', fmtDateTime(t.createdAtMs || t.createdAt)),
-      t.updatedAtMs ? row('Изменена', fmtDateTime(t.updatedAtMs)) : row('Изменена', '—'),
+      t.updatedAtMs ? row('Изменена', fmtDateTime(t.updatedAtMs)) : '',
     ].join('');
   }
 
@@ -1787,9 +1819,28 @@ function txDetailModalHtml(txId) {
           ${amountBlock}
           ${rowsHtml}
         </div>
-        <div style="padding:16px 20px;display:flex;gap:10px">
-          <button data-tx-edit="${t.id}" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#ccc;cursor:pointer;font-size:13px">✏️ Редактировать</button>
-          <button data-tx-del="${t.id}" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.07);color:#f87171;cursor:pointer;font-size:13px">🗑 Удалить</button>
+        <div style="padding:16px 0 0;display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;box-sizing:border-box">
+          <button data-tx-edit="${t.id}" style="width:100%;box-sizing:border-box;height:44px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#ccc;cursor:pointer;font-size:13px;text-align:center;line-height:1;white-space:nowrap">✏️ Редактировать</button>
+          <button data-tx-del="${t.id}" style="width:100%;box-sizing:border-box;height:44px;border-radius:10px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.07);color:#f87171;cursor:pointer;font-size:13px;text-align:center;line-height:1;white-space:nowrap">🗑 Удалить</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function deleteConfirmModalHtml() {
+  const txId = state._pendingDeleteTxId;
+  const tx = state.transactions.find(t => t.id === txId) || {};
+  const amt = tx.amount ? fmt(tx.amount, tx.currency||'RUB') : '';
+  const label = tx.note || tx.category || 'операция';
+  return `
+    <div class="modal-bg" id="delete-confirm-bg" style="z-index:2000">
+      <div class="modal" id="delete-confirm-inner" style="max-width:360px;text-align:center">
+        <div style="font-size:40px;margin-bottom:12px">🗑</div>
+        <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:8px">Удалить операцию?</div>
+        <div style="font-size:13px;color:#888;margin-bottom:24px">${escapeHtml(label)}${amt ? ' · ' + amt : ''}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <button id="btn-confirm-delete" style="height:44px;border-radius:10px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.15);color:#f87171;cursor:pointer;font-size:14px;font-weight:700">Удалить</button>
+          <button id="btn-cancel-delete" style="height:44px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#ccc;cursor:pointer;font-size:14px">Отмена</button>
         </div>
       </div>
     </div>`;
@@ -3029,20 +3080,18 @@ function modalHtml() {
           <button class="modal-close" id="modal-close">×</button>
         </div>
         <div class="form-grid">
-          <div class="form-row form-row-2">
-            <div>
-              <div class="form-label">Тип</div>
-              <select class="form-inp" id="f-type">
-                <option value="income"   ${f.type==='income'   ?'selected':''}>🟢 Доход</option>
-                <option value="expense"  ${f.type==='expense'  ?'selected':''}>🔴 Расход</option>
-                <option value="transfer" ${f.type==='transfer' ?'selected':''}>🟡 Перевод</option>
-                <option value="dividend" ${f.type==='dividend' ?'selected':''}><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a78bfa;margin-right:5px;vertical-align:middle"></span>Дивиденды</option>
-              </select>
-            </div>
-            <div>
-              <div class="form-label">Дата</div>
-              <input type="date" class="form-inp" id="f-date" value="${f.date}">
-            </div>
+          <div>
+            <div class="form-label">Тип</div>
+            <select class="form-inp" id="f-type">
+              <option value="income"   ${f.type==='income'   ?'selected':''}>🟢 Доход</option>
+              <option value="expense"  ${f.type==='expense'  ?'selected':''}>🔴 Расход</option>
+              <option value="transfer" ${f.type==='transfer' ?'selected':''}>🟡 Перевод</option>
+              <option value="dividend" ${f.type==='dividend' ?'selected':''}>🟣 Дивиденды</option>
+            </select>
+          </div>
+          <div>
+            <div class="form-label">Дата</div>
+            <input type="date" class="form-inp" id="f-date" value="${f.date}">
           </div>
 
           ${isDDS ? `
@@ -3268,7 +3317,7 @@ function periodModalHtml() {
   }).join('');
 
   const qBtn = (id, active, label) =>
-    `<button id="${id}" style="padding:10px 6px;border-radius:10px;border:1px solid ${active?'rgba(167,139,250,0.5)':'rgba(255,255,255,0.1)'};background:${active?'rgba(167,139,250,0.12)':'rgba(255,255,255,0.04)'};color:${active?'#a78bfa':'#888'};cursor:pointer;font-size:12px;font-weight:${active?'700':'500'};transition:all 0.15s;text-align:center;flex:1">${label}</button>`;
+    `<button id="${id}" style="padding:11px 4px;border-radius:10px;border:1px solid ${active?'rgba(167,139,250,0.5)':'rgba(255,255,255,0.1)'};background:${active?'rgba(167,139,250,0.12)':'rgba(255,255,255,0.04)'};color:${active?'#a78bfa':'#888'};cursor:pointer;font-size:12px;font-weight:${active?'700':'500'};transition:all 0.15s;text-align:center;flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${label}</button>`;
 
   return `
     <div class="modal-bg" id="period-modal-bg">
@@ -3279,19 +3328,20 @@ function periodModalHtml() {
         </div>
         <div class="form-grid">
 
-          <!-- 3 quick buttons -->
-          <div style="display:flex;gap:8px">
-            ${qBtn('pmode-today', mode==='today', '📍 Сегодня')}
-            ${qBtn('pmode-week',  mode==='week',  '📅 Неделя')}
-            ${qBtn('pmode-all',   mode==='all',   '🌐 Всё время')}
+          <!-- 3 quick buttons — equal width, no overflow -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;width:100%;box-sizing:border-box;overflow:hidden">
+            ${qBtn('pmode-today', mode==='today', 'Сегодня')}
+            ${qBtn('pmode-week',  mode==='week',  'Неделя')}
+            ${qBtn('pmode-all',   mode==='all',   'Всё время')}
           </div>
 
           <!-- Свой период / Выбрать месяц toggle button -->
-          <button id="pmode-range" style="width:100%;padding:11px;border-radius:10px;border:1px solid ${showRange?'rgba(167,139,250,0.5)':'rgba(255,255,255,0.1)'};background:${showRange?'rgba(167,139,250,0.12)':'rgba(255,255,255,0.04)'};color:${showRange?'#a78bfa':'#888'};cursor:pointer;font-size:13px;font-weight:${showRange?'700':'500'};transition:all 0.15s">
+          <button id="pmode-range" style="width:100%;padding:11px;border-radius:10px;border:1px solid ${showRange?'rgba(167,139,250,0.5)':'rgba(255,255,255,0.1)'};background:${showRange?'rgba(167,139,250,0.12)':'rgba(255,255,255,0.04)'};color:${showRange?'#a78bfa':'#888'};cursor:pointer;font-size:13px;font-weight:${showRange?'700':'500'};transition:all 0.15s;box-sizing:border-box">
             ${showRange ? '📅 Выбрать месяц' : '🗓 Свой период'}
           </button>
 
-          <!-- Range inputs (when свой период active) -->
+          <!-- Swappable content block: range or month -->
+          <div id="period-content-block">
           ${showRange ? `
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             <div>
@@ -3304,12 +3354,14 @@ function periodModalHtml() {
             </div>
           </div>
           <button class="btn-submit" id="btn-period-apply">Применить</button>` : `
-          <!-- Month picker (hidden when свой период active) -->
+          <!-- Month picker -->
           <div>
             <div class="form-label">Конкретный месяц</div>
             <select class="form-inp" id="period-month">${monthOpts}</select>
           </div>
           <button class="btn-submit" id="btn-period-apply">Применить</button>`}
+          </div>
+          <script>window._periodMonthOpts = ${JSON.stringify(monthOpts)};</script>
 
           ${state.activePeriod ? `<button id="btn-period-reset" style="width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#555;cursor:pointer;font-size:13px;margin-top:-8px">✕ Сбросить фильтр</button>` : ''}
         </div>
@@ -4104,6 +4156,44 @@ function confirmAiTxs() {
   saveToStorage(); render(); scrollAiToBottom();
 }
 
+// ─── Period apply logic ────────────────────────────────────────────────────
+function _bindPeriodApply() {
+  var applyBtn = document.getElementById('btn-period-apply') || document.getElementById('btn-period-apply-inner');
+  if (!applyBtn) return;
+  applyBtn.onclick = function() {
+    var mode = (state.activePeriod || {}).mode || 'month';
+    if (mode === 'range') {
+      var from = (document.getElementById('period-from')||{}).value;
+      var to   = (document.getElementById('period-to')||{}).value;
+      if (!from || !to) { showToast('Укажи обе даты', 'error'); return; }
+      if (from > to) { showToast('Дата «С» должна быть раньше даты «По»', 'error'); return; }
+      state.activePeriod = { mode: 'range', from, to };
+    } else {
+      var mk = (document.getElementById('period-month')||{}).value;
+      if (!mk) return;
+      state.activePeriod = { mode: 'month', month: mk };
+      state.activeMonth = mk;
+    }
+    state.showPeriodModal = false;
+    render();
+  };
+}
+
+// ─── Toggle patch — updates visual state without render() ───────────────────
+function _patchToggle(checkbox) {
+  const label = checkbox.closest('label');
+  if (!label) return;
+  const track = label.querySelector('span');
+  if (!track) return;
+  const knob = track.querySelector('span');
+  const on = checkbox.checked;
+  track.style.background = on ? '#6ee7b7' : 'rgba(255,255,255,0.1)';
+  if (knob) {
+    knob.style.left = on ? '23px' : '3px';
+    knob.style.background = on ? '#0a0a12' : '#555';
+  }
+}
+
 // ─── BIND EVENTS ───────────────────────────────────────────────────────────
 function bindEvents() {
   // header buttons
@@ -4121,8 +4211,9 @@ function bindEvents() {
     // Remove transactions for this month
     state.transactions = state.transactions.filter(t => !(t.date||'').startsWith(month));
 
-    // Recalculate account balances from scratch
+    // Recalculate account and fund balances from scratch
     Object.values(state.accounts).forEach(a => { a.balance = 0; });
+    Object.values(state.funds).forEach(f => { f.balance = 0; });
     state.transactions.forEach(t => {
       if (t.type === 'transfer' || t.isTransfer) {
         const fa = state.accounts[t.fromAccount];
@@ -4133,6 +4224,10 @@ function bindEvents() {
         const a = state.accounts[t.account]; if (a) a.balance += parseFloat(t.amount) || 0;
       } else if (t.type === 'expense') {
         const a = state.accounts[t.account]; if (a) a.balance -= parseFloat(t.amount) || 0;
+      } else if (t.type === 'fund_in') {
+        const f = state.funds[t.fund]; if (f) f.balance += parseFloat(t.amount) || 0;
+      } else if (t.type === 'fund_out') {
+        const f = state.funds[t.fund]; if (f) f.balance -= parseFloat(t.amount) || 0;
       }
     });
 
@@ -4194,34 +4289,48 @@ function bindEvents() {
     };
   });
 
-  // Range toggle button — just toggle visibility
+  // Range toggle button — patch DOM in-place, no render()
   var rangeBtn = document.getElementById('pmode-range');
   if (rangeBtn) rangeBtn.onclick = function() {
     var cur = (state.activePeriod || {}).mode;
     if (!state.activePeriod) state.activePeriod = {};
-    state.activePeriod.mode = cur === 'range' ? 'month' : 'range';
-    render();
+    var goRange = cur !== 'range';
+    state.activePeriod.mode = goRange ? 'range' : 'month';
+
+    // Swap button label
+    rangeBtn.textContent = goRange ? '📅 Выбрать месяц' : '🗓 Свой период';
+    var activeStyle  = 'rgba(167,139,250,0.5)';
+    var inactiveStyle = 'rgba(255,255,255,0.1)';
+    rangeBtn.style.border = '1px solid ' + (goRange ? activeStyle : inactiveStyle);
+    rangeBtn.style.background = goRange ? 'rgba(167,139,250,0.12)' : 'rgba(255,255,255,0.04)';
+    rangeBtn.style.color = goRange ? '#a78bfa' : '#888';
+    rangeBtn.style.fontWeight = goRange ? '700' : '500';
+
+    // Swap content block: range inputs ↔ month select
+    var container = document.getElementById('period-content-block');
+    if (!container) return;
+    if (goRange) {
+      var pFrom = (state.activePeriod||{}).from || '';
+      var pTo   = (state.activePeriod||{}).to   || '';
+      container.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+        + '<div><div class="form-label">С даты</div><input type="date" class="form-inp" id="period-from" value="' + pFrom + '"></div>'
+        + '<div><div class="form-label">По дату</div><input type="date" class="form-inp" id="period-to" value="' + pTo + '"></div>'
+        + '</div>'
+        + '<button class="btn-submit" id="btn-period-apply-inner">Применить</button>';
+    } else {
+      var monthOptsHtml = window._periodMonthOpts || '';
+      container.innerHTML = '<div><div class="form-label">Конкретный месяц</div>'
+        + '<select class="form-inp" id="period-month">' + monthOptsHtml + '</select></div>'
+        + '<button class="btn-submit" id="btn-period-apply-inner">Применить</button>';
+    }
+    // Re-bind apply inside swapped content
+    var innerApply = document.getElementById('btn-period-apply-inner');
+    if (innerApply) innerApply.onclick = document.getElementById('btn-period-apply') && document.getElementById('btn-period-apply').onclick || function(){};
+    _bindPeriodApply();
   };
 
-  // Apply button — reads month select or range inputs
-  var applyBtn = document.getElementById('btn-period-apply');
-  if (applyBtn) applyBtn.onclick = function() {
-    var mode = (state.activePeriod || {}).mode || 'month';
-    if (mode === 'range') {
-      var from = (document.getElementById('period-from')||{}).value;
-      var to   = (document.getElementById('period-to')||{}).value;
-      if (!from || !to) { showToast('Укажи обе даты', 'error'); return; }
-      if (from > to) { showToast('Дата «С» должна быть раньше даты «По»', 'error'); return; }
-      state.activePeriod = { mode: 'range', from, to };
-    } else {
-      var mk = (document.getElementById('period-month')||{}).value;
-      if (!mk) return;
-      state.activePeriod = { mode: 'month', month: mk };
-      state.activeMonth = mk;
-    }
-    state.showPeriodModal = false;
-    render();
-  };
+  // Apply button
+  _bindPeriodApply();
 
   // Reset button
   var resetBtn = document.getElementById('btn-period-reset');
@@ -4286,13 +4395,13 @@ function bindEvents() {
     el.onclick = () => { state.lang = el.dataset.langSet; saveToStorage(); render(); };
   });
 
-  // Module toggles — write to draft only, apply on close
+  // Module toggles — patch DOM in-place, no render()
   document.querySelectorAll('[data-module]').forEach(el => {
     el.onchange = () => {
       if (!_settingsDraft) _openSettingsDraft();
       if (!_settingsDraft.enabledModules) _settingsDraft.enabledModules = Object.assign({}, state.enabledModules || {});
       _settingsDraft.enabledModules[el.dataset.module] = el.checked;
-      render();
+      _patchToggle(el);
     };
   });
 
@@ -4300,13 +4409,13 @@ function bindEvents() {
   const settingsModalBg = document.getElementById('settings-modal-bg');
   if (settingsModalBg) settingsModalBg.onclick = e => { if (e.target === settingsModalBg) { state.showSettingsModal = false; _applySettingsDraft(); saveToStorage(); render(); } };
 
-  // Currency toggles — write to draft only, apply on close
+  // Currency toggles — patch DOM in-place, no render()
   document.querySelectorAll('[data-cur-toggle]').forEach(el => {
     el.onchange = () => {
       if (!_settingsDraft) _openSettingsDraft();
       const checked = [...document.querySelectorAll('[data-cur-toggle]:checked')].map(e => e.dataset.curToggle);
       _settingsDraft.enabledCurrencies = ['RUB', ...checked];
-      render();
+      _patchToggle(el);
     };
   });
 
@@ -5533,13 +5642,31 @@ function bindEvents() {
     if (txDelBtn) {
       const txId = txDelBtn.dataset.txDel;
       const tx = state.transactions.find(t => t.id === txId);
+      if (!tx) return;
+      state._pendingDeleteTxId = txId;
+      state.showDeleteConfirm = true;
+      render();
+      return;
+    }
+    // Confirm delete
+    if (e.target.id === 'btn-confirm-delete') {
+      const txId = state._pendingDeleteTxId;
+      const tx = state.transactions.find(t => t.id === txId);
       if (tx) {
         const acc = state.accounts[tx.account];
         if (acc) { if (tx.type==='income') acc.balance -= parseFloat(tx.amount)||0; else if (tx.type==='expense') acc.balance += parseFloat(tx.amount)||0; }
         state.transactions = state.transactions.filter(t => t.id !== txId);
-        state.showTxDetail = null;
-        saveToStorage(); render();
       }
+      state.showDeleteConfirm = false;
+      state._pendingDeleteTxId = null;
+      state.showTxDetail = null;
+      saveToStorage(); render();
+      return;
+    }
+    if (e.target.id === 'btn-cancel-delete' || e.target.id === 'delete-confirm-bg') {
+      state.showDeleteConfirm = false;
+      state._pendingDeleteTxId = null;
+      render();
       return;
     }
     // Open switcher (desktop: btn-open-project-switcher, mobile: btn-open-project-switcher-m)
@@ -5562,11 +5689,43 @@ function bindEvents() {
     // Back
     if (e.target.id === 'btn-proj-create-back' || e.target.id === 'btn-proj-edit-back') { _projSwitcherMode = 'list'; render(); return; }
     // Emoji/color pickers — create
-    if (e.target.dataset.newEmoji) { _projNewEmoji = e.target.dataset.newEmoji; const v = document.getElementById('proj-new-name')?.value||''; render(); const el = document.getElementById('proj-new-name'); if(el) el.value=v; return; }
-    if (e.target.dataset.newColor) { _projNewColor = e.target.dataset.newColor; const v = document.getElementById('proj-new-name')?.value||''; render(); const el = document.getElementById('proj-new-name'); if(el) el.value=v; return; }
+    if (e.target.dataset.newEmoji) {
+      _projNewEmoji = e.target.dataset.newEmoji;
+      document.querySelectorAll('[data-new-emoji]').forEach(el => {
+        const sel = el.dataset.newEmoji === _projNewEmoji;
+        el.style.border = sel ? '1px solid rgba(110,231,183,0.5)' : '1px solid rgba(255,255,255,0.08)';
+        el.style.background = sel ? 'rgba(110,231,183,0.15)' : 'rgba(255,255,255,0.04)';
+      });
+      return;
+    }
+    if (e.target.dataset.newColor) {
+      _projNewColor = e.target.dataset.newColor;
+      document.querySelectorAll('[data-new-color]').forEach(el => {
+        const sel = el.dataset.newColor === _projNewColor;
+        el.style.border = sel ? '3px solid #fff' : '3px solid transparent';
+        el.style.transform = sel ? 'scale(1.2)' : 'scale(1)';
+      });
+      return;
+    }
     // Emoji/color pickers — edit
-    if (e.target.dataset.editEmoji) { _projEditEmoji = e.target.dataset.editEmoji; const v = document.getElementById('proj-edit-name')?.value||''; render(); const el = document.getElementById('proj-edit-name'); if(el) el.value=v; return; }
-    if (e.target.dataset.editColor) { _projEditColor = e.target.dataset.editColor; const v = document.getElementById('proj-edit-name')?.value||''; render(); const el = document.getElementById('proj-edit-name'); if(el) el.value=v; return; }
+    if (e.target.dataset.editEmoji) {
+      _projEditEmoji = e.target.dataset.editEmoji;
+      document.querySelectorAll('[data-edit-emoji]').forEach(el => {
+        const sel = el.dataset.editEmoji === _projEditEmoji;
+        el.style.border = sel ? '1px solid rgba(110,231,183,0.5)' : '1px solid rgba(255,255,255,0.08)';
+        el.style.background = sel ? 'rgba(110,231,183,0.15)' : 'rgba(255,255,255,0.04)';
+      });
+      return;
+    }
+    if (e.target.dataset.editColor) {
+      _projEditColor = e.target.dataset.editColor;
+      document.querySelectorAll('[data-edit-color]').forEach(el => {
+        const sel = el.dataset.editColor === _projEditColor;
+        el.style.border = sel ? '3px solid #fff' : '3px solid transparent';
+        el.style.transform = sel ? 'scale(1.2)' : 'scale(1)';
+      });
+      return;
+    }
     // Submit create new project
     if (e.target.id === 'btn-proj-create-submit') {
       const name = (document.getElementById('proj-new-name')?.value || '').trim();

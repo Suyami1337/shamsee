@@ -2,6 +2,12 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<script>
+(function(){
+  // No auto-redirect — dashboard.html handles routing
+  // Direct access to finance-mobile.html always loads mobile version
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>MyFinanceAI</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -150,12 +156,13 @@
     cursor: pointer; padding: 4px 10px;
   }
   .bot-add-ring {
-    width: 52px; height: 52px; border-radius: 50%;
+    width: 62px; height: 62px; border-radius: 50%;
     background: linear-gradient(135deg, var(--green), var(--blue));
     display: flex; align-items: center; justify-content: center;
-    font-size: 26px; font-weight: 300; color: #000; line-height: 1;
-    box-shadow: 0 0 0 0 rgba(110,231,183,0.4);
+    font-size: 30px; font-weight: 300; color: #000; line-height: 1;
+    box-shadow: 0 4px 16px rgba(110,231,183,0.35);
     transition: transform 0.12s, box-shadow 0.2s;
+    margin-top: -14px;
   }
   .bot-add-ring.open {
     background: linear-gradient(135deg, #f87171, #a78bfa);
@@ -595,6 +602,10 @@ document.addEventListener('click', function(e) {
     if (idx >= 0) state.txCatFilter.splice(idx, 1); else state.txCatFilter.push(c);
     render(); return;
   }
+  // edit-tx save
+  if (e.target.id === 'btn-etx-save' || e.target.closest('#btn-etx-save')) {
+    e.stopPropagation(); _saveEditedTx(); return;
+  }
   // edit-tx modal — close
   if (e.target.id === 'edit-tx-close' || e.target.id === 'edit-tx-bg') {
     state.showEditTxModal = null; render(); return;
@@ -669,7 +680,7 @@ transactionsHtml = function() {
   const row3 = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">'
     + '<div style="position:relative;flex:1;display:flex;align-items:center">'
     + '<input id="m-tx-search" type="text" placeholder="🔍 Поиск..." value="' + (state.txSearch||'') + '" oninput="state.txSearch=this.value;_renderWithoutSearchBlur()" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:9px ' + (state.txSearch?'36px':'14px') + ' 9px 14px;color:#ccc;font-size:13px;outline:none;font-family:inherit">'
-    + (state.txSearch ? '<button onclick="state.txSearch=\'\';render()" style="position:absolute;right:10px;background:none;border:none;color:#666;cursor:pointer;font-size:17px;line-height:1;padding:0">×</button>' : '')
+    + (state.txSearch ? '<button onclick="state.txSearch=\'\';render()" style="position:absolute;right:0;top:0;bottom:0;width:44px;background:none;border:none;color:#aaa;cursor:pointer;font-size:20px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center">×</button>' : '')
     + '</div>'
     + '<button onclick="state.showMobileAdvFilter=true;render()" style="flex-shrink:0;padding:9px 14px;border-radius:12px;border:1px solid ' + (hasAdvFilter?'rgba(167,139,250,0.5)':'rgba(255,255,255,0.1)') + ';background:' + (hasAdvFilter?'rgba(167,139,250,0.12)':'rgba(255,255,255,0.04)') + ';color:' + (hasAdvFilter?'#a78bfa':'#666') + ';cursor:pointer;font-size:12px;font-family:inherit;white-space:nowrap">⚙️ Фильтр' + (hasAdvFilter?' ●':'') + '</button>'
     + '</div>';
@@ -991,6 +1002,29 @@ function render() {
 
     // Render modals into a fixed overlay container on body
     // Modals rendered into fixed body-level container
+
+    // Delete confirm — separate root above everything (z-index:9999)
+    let confirmRoot = document.getElementById('confirm-root');
+    if (!confirmRoot) {
+      confirmRoot = document.createElement('div');
+      confirmRoot.id = 'confirm-root';
+      document.body.appendChild(confirmRoot);
+    }
+    if (state.showDeleteConfirm) {
+      confirmRoot.innerHTML = deleteConfirmModalHtml();
+      confirmRoot.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;pointer-events:all';
+      // Swipe to cancel — reset flag so _initSwipeClose re-attaches after each render
+      const _innerEl = document.getElementById('delete-confirm-inner');
+      if (_innerEl) _innerEl._swipeInited = false;
+      const _cancelDelete = () => { state.showDeleteConfirm = false; state._pendingDeleteTxId = null; render(); };
+      _initSwipeClose('delete-confirm-inner', _cancelDelete);
+      const bg = confirmRoot.querySelector('#delete-confirm-bg');
+      if (bg) bg.addEventListener('click', e => { if (e.target === bg) _cancelDelete(); }, { once: true });
+    } else {
+      confirmRoot.innerHTML = '';
+      confirmRoot.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;pointer-events:none';
+    }
+
     let modalRoot = document.getElementById('modal-root');
     if (!modalRoot) {
       modalRoot = document.createElement('div');
@@ -1433,7 +1467,21 @@ function _renderTabbarOnly() {
   });
 }
 
+function _returnToSheet() {
+  if (state._mobileAccSheetKey) {
+    state._mobileAccKey = state._mobileAccSheetKey;
+    state._mobileAccSheet = true;
+    state._mobileAccSheetNoAnim = true;
+  }
+}
+
 function _bindMobileExtra() {
+  // Edit tx save — direct binding, bypasses any swipe/touch interference
+  const btnEtxSave = document.getElementById('btn-etx-save');
+  if (btnEtxSave) {
+    btnEtxSave.ontouchend = (e) => { e.preventDefault(); e.stopPropagation(); _saveEditedTx(); };
+    btnEtxSave.onclick    = (e) => { e.stopPropagation(); _saveEditedTx(); };
+  }
   // Account row click — show action sheet
   document.querySelectorAll('[data-acc]').forEach(el => {
     el.onclick = () => {
@@ -1449,7 +1497,7 @@ function _bindMobileExtra() {
 
   // Swipe-to-close for all bottom sheets
   _initSwipeClose('ai-chat-wrap-inner',   ()=>{state.showAiChat=false;render();});
-  _initSwipeClose('edit-tx-inner',        ()=>{state.showEditTxModal=null;render();});
+  _initSwipeClose('edit-tx-inner',        ()=>{ const txId = state.showEditTxModal; state.showEditTxModal=null; if(txId) state.showTxDetail=txId; render(); });
   _initSwipeClose('tx-detail-inner',      ()=>{state.showTxDetail=null;render();});
   _initSwipeClose('export-inner',         ()=>{state.showExportModal=false;render();});
   _initSwipeClose('partner-modal-inner',  ()=>{state.showPartnerModal=false;render();});
@@ -1458,14 +1506,14 @@ function _bindMobileExtra() {
   _initSwipeClose('add-dir-inner',        ()=>{state.showAddDirModal=false;render();});
   _initSwipeClose('edit-dir-inner',       ()=>{state.showEditDirModal=false;render();});
   _initSwipeClose('rates-inner',          ()=>{state.showRates=false;render();});
-  _initSwipeClose('new-tx-inner',         ()=>{state.showModal=false;render();});
-  _initSwipeClose('acc-modal-inner',      ()=>{state.showAccModal=false;render();});
+  _initSwipeClose('new-tx-inner',         ()=>{state.showModal=false;_returnToSheet();render();});
+  _initSwipeClose('acc-modal-inner',      ()=>{state.showAccModal=false;_returnToSheet();render();});
   _initSwipeClose('fund-modal-inner',     ()=>{state.showFundModal=false;render();});
   _initSwipeClose('m-period-inner',        ()=>{state.showPeriodModal=false;render();});
   _initSwipeClose('ai-edit-inner',        ()=>{state.aiEditingIdx=null;render();});
   _initSwipeClose('mode-picker-inner',    ()=>{state.showModePicker=false;render();});
   _initSwipeClose('settings-modal-inner', ()=>{state.showSettingsModal=false;_applySettingsDraft();saveToStorage();render();});
-  _initSwipeClose('m-acc-sheet-inner',  ()=>{state.showAccModal=false;render();});
+  _initSwipeClose('m-acc-sheet-inner',  ()=>{state._mobileAccSheet=false;state._mobileAccSheetKey=null;render();});
   _initSwipeClose('m-fund-sheet-inner', ()=>{state.showFundModal=false;render();});
   _initSwipeClose('m-adv-sheet-inner',  ()=>{state.showMobileAdvFilter=false;render();});
 
@@ -1496,13 +1544,7 @@ function _bindMobileExtra() {
   _initSwipeClose('m-edit-fund-inner',  ()=>{state.showEditFundModal=false;render();});
 
   // Generic modal close → return to account sheet if opened from sheet
-  const _returnToSheet = () => {
-    if (state._mobileAccSheetKey) {
-      state._mobileAccKey = state._mobileAccSheetKey;
-      state._mobileAccSheet = true;
-      state._mobileAccSheetNoAnim = true;
-    }
-  };
+  // (defined globally above _bindMobileExtra for use in _initSwipeClose)
   const modalClose = document.getElementById('modal-close');
   const modalBg    = document.getElementById('modal-bg');
   const _closeModal = () => { state.showModal = false; _returnToSheet(); render(); };

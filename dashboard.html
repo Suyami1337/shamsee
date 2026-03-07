@@ -8,9 +8,11 @@
 </style>
 <script>
 (function() {
+  var params = new URLSearchParams(window.location.search);
+  if (params.get('mobile') === '1') { window.location.replace('/finance-mobile.html'); return; }
+  if (params.get('mobile') === '0') { window.location.replace('/finance.html'); return; }
   var ua = navigator.userAgent || '';
   var isMobile = /iPhone|iPad|iPod|Android|BlackBerry|Windows Phone|IEMobile|Opera Mini|Silk|webOS/i.test(ua);
-  // Also check screen width as fallback
   var isNarrow = window.innerWidth <= 768;
   if (isMobile || isNarrow) {
     window.location.replace('/finance-mobile.html');
