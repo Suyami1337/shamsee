@@ -1298,6 +1298,51 @@ function reRenderEditFields(newType) {
   container.innerHTML = buildEditFields(newType, snapshot);
 }
 
+
+// ── Save edited transaction — called from btn-etx-save onclick ──────────
+function _saveEditedTx() {
+  const txId = state.showEditTxModal;
+  const idx  = state.transactions.findIndex(x => x.id === txId);
+  if (idx === -1) return;
+  const tx = state.transactions[idx];
+  const g  = id => (document.getElementById(id)||{}).value || '';
+  const newType   = g('etx-type')    || tx.type;
+  const newDate   = g('etx-date')    || tx.date;
+  const newNote   = g('etx-note');
+  const newAcc    = g('etx-account') || tx.account;
+  const newCat    = g('etx-category')|| tx.category;
+  const newCur    = g('etx-currency')|| tx.currency;
+  const newAmtRaw = g('etx-amount');
+  const newAmt    = newAmtRaw ? parseFloat(newAmtRaw) : parseFloat(tx.amount)||0;
+  // reverse old balance
+  const oldAcc = state.accounts[tx.account];
+  if (oldAcc && (tx.type==='income'||tx.type==='expense')) {
+    if (tx.type==='income') oldAcc.balance -= parseFloat(tx.amount)||0;
+    else                    oldAcc.balance += parseFloat(tx.amount)||0;
+  }
+  // apply new balance
+  const newAccObj = state.accounts[newAcc];
+  if (newAccObj && (newType==='income'||newType==='expense')) {
+    if (newType==='income') newAccObj.balance += newAmt;
+    else                    newAccObj.balance -= newAmt;
+  }
+  if (newType === 'transfer') {
+    const fromAcc = g('etx-from-account') || tx.fromAccount;
+    const toAcc   = g('etx-to-account')   || tx.toAccount;
+    const fromAmt = parseFloat(g('etx-from-amount') || tx.fromAmount || tx.amount) || 0;
+    const toAmt   = parseFloat(g('etx-to-amount')   || tx.toAmount   || tx.amount) || fromAmt;
+    state.transactions[idx] = { ...tx, type: newType, date: newDate, note: newNote,
+      fromAccount: fromAcc, toAccount: toAcc, fromAmount: fromAmt, toAmount: toAmt,
+      category: newCat, updatedAtMs: Date.now() };
+  } else {
+    state.transactions[idx] = { ...tx, type: newType, date: newDate, note: newNote,
+      account: newAcc, amount: newAmt, currency: newCur, category: newCat,
+      direction: tx.direction || _projectId || '', updatedAtMs: Date.now() };
+  }
+  state.showEditTxModal = null;
+  saveToStorage(); render();
+  showToast('Операция сохранена', 'success');
+}
 function editTxModalHtml(txId) {
   const t = state.transactions.find(x => x.id === txId);
   if (!t) return '';
@@ -1329,7 +1374,7 @@ function editTxModalHtml(txId) {
           <div id="etx-fields">${fieldsHtml}</div>
           <div><div class="form-label">Комментарий</div>
             <input type="text" class="form-inp" id="etx-note" value="${note}"></div>
-          <button class="btn-submit" id="btn-etx-save">Сохранить</button>
+          <button class="btn-submit" id="btn-etx-save" onclick="_saveEditedTx()">Сохранить</button>
         </div>
       </div>
     </div>`;
@@ -5098,52 +5143,7 @@ function bindEvents() {
   const editTxClose = document.getElementById('edit-tx-close');
   if (editTxBg)    editTxBg.onclick    = e => { if(e.target===editTxBg){state.showEditTxModal=null;render();} };
   if (editTxClose) editTxClose.onclick = () => { state.showEditTxModal=null; render(); };
-  const btnEtxSave = document.getElementById('btn-etx-save');
-  if (btnEtxSave) btnEtxSave.onclick = () => {
-    const txId = state.showEditTxModal;
-    const idx  = state.transactions.findIndex(x => x.id === txId);
-    if (idx === -1) return;
-    const tx = state.transactions[idx];
-    const g  = id => (document.getElementById(id)||{}).value || '';
-    const newType    = g('etx-type')     || tx.type;
-    const newDate    = g('etx-date')     || tx.date;
-    const newNote    = g('etx-note');
-    const newAcc     = g('etx-account')  || tx.account;
-    const newCat     = g('etx-category') || tx.category;
-    const newCur     = g('etx-currency') || tx.currency;
-    const newAmtRaw  = g('etx-amount');
-    const newAmt     = newAmtRaw ? parseFloat(newAmtRaw) : parseFloat(tx.amount)||0;
-    // reverse old balance effect
-    const oldAcc = state.accounts[tx.account];
-    if (oldAcc && (tx.type==='income'||tx.type==='expense')) {
-      if (tx.type==='income')  oldAcc.balance -= parseFloat(tx.amount)||0;
-      else                     oldAcc.balance += parseFloat(tx.amount)||0;
-    }
-    // apply new balance effect
-    const newAccObj = state.accounts[newAcc];
-    if (newAccObj && (newType==='income'||newType==='expense')) {
-      if (newType==='income')  newAccObj.balance += newAmt;
-      else                     newAccObj.balance -= newAmt;
-    }
-    // handle transfer fields
-    if (newType === 'transfer') {
-      const fromAcc  = g('etx-from-account') || tx.fromAccount;
-      const toAcc    = g('etx-to-account')   || tx.toAccount;
-      const fromAmt  = parseFloat(g('etx-from-amount') || tx.fromAmount || tx.amount) || 0;
-      const toAmt    = parseFloat(g('etx-to-amount')   || tx.toAmount   || tx.amount) || fromAmt;
-      state.transactions[idx] = { ...tx, type: newType, date: newDate, note: newNote,
-        fromAccount: fromAcc, toAccount: toAcc, fromAmount: fromAmt, toAmount: toAmt,
-        category: newCat, updatedAtMs: Date.now() };
-    } else {
-      state.transactions[idx] = { ...tx, type: newType, date: newDate, note: newNote,
-        account: newAcc, amount: newAmt, currency: newCur, category: newCat,
-        direction: tx.direction || _projectId || '',
-        updatedAtMs: Date.now() };
-    }
-    state.showEditTxModal = null;
-    saveToStorage(); render();
-    showToast('Операция сохранена', 'success');
-  };
+  // btn-etx-save handled via onclick="_saveEditedTx()" in HTML
   // delete cat row
   document.querySelectorAll('[data-cat-del]').forEach(el => {
     if (el.disabled) return;
