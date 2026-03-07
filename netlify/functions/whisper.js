@@ -1,18 +1,59 @@
 exports.handler = async function(event) {
+  const ALLOWED_ORIGIN = 'https://myfinanceai.netlify.app';
+  const origin = event.headers['origin'] || event.headers['Origin'] || '';
+
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+
   if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      },
-      body: '',
-    };
+    return { statusCode: 200, headers: corsHeaders, body: '' };
   }
 
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
+    return { statusCode: 405, headers: corsHeaders, body: 'Method Not Allowed' };
+  }
+
+  // SEC: Проверяем origin
+  if (origin && origin !== ALLOWED_ORIGIN) {
+    return {
+      statusCode: 403,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      body: JSON.stringify({ error: 'Forbidden' }),
+    };
+  }
+
+  // SEC: Проверяем JWT токен
+  const authHeader = event.headers['authorization'] || event.headers['Authorization'] || '';
+  if (!authHeader.startsWith('Bearer ')) {
+    return {
+      statusCode: 401,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      body: JSON.stringify({ error: 'Unauthorized — token required' }),
+    };
+  }
+
+  const token = authHeader.slice(7);
+  try {
+    const verifyResp = await fetch(
+      `${process.env.SUPABASE_URL}/auth/v1/user`,
+      { headers: { 'Authorization': `Bearer ${token}`, 'apikey': process.env.SUPABASE_ANON_KEY } }
+    );
+    if (!verifyResp.ok) {
+      return {
+        statusCode: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        body: JSON.stringify({ error: 'Unauthorized — invalid token' }),
+      };
+    }
+  } catch(e) {
+    return {
+      statusCode: 401,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      body: JSON.stringify({ error: 'Unauthorized — token verification failed' }),
+    };
   }
 
   try {
@@ -20,7 +61,7 @@ exports.handler = async function(event) {
     if (!GROQ_API_KEY) {
       return {
         statusCode: 500,
-        headers: { 'Access-Control-Allow-Origin': '*' },
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
         body: JSON.stringify({ error: 'GROQ_API_KEY not set in environment variables' }),
       };
     }
@@ -29,15 +70,26 @@ exports.handler = async function(event) {
     if (!audio) {
       return {
         statusCode: 400,
-        headers: { 'Access-Control-Allow-Origin': '*' },
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
         body: JSON.stringify({ error: 'No audio data' }),
       };
     }
 
+    const MAX_BYTES = 19 * 1024 * 1024;
+    const base64Bytes = audio.length * 0.75;
+    if (base64Bytes > MAX_BYTES) {
+      return {
+        statusCode: 413,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        body: JSON.stringify({ error: 'Аудио слишком большое (лимит ~19 МБ). Запишите более короткое сообщение.' }),
+      };
+    }
+
     const audioBuffer = Buffer.from(audio, 'base64');
-    const ext = mimeType === 'audio/mp4' ? 'm4a'
-              : mimeType === 'audio/ogg' ? 'ogg'
-              : mimeType === 'audio/wav' ? 'wav'
+    const mt = (mimeType || '').toLowerCase();
+    const ext = (mt.includes('mp4') || mt.includes('m4a')) ? 'm4a'
+              : mt.includes('ogg') ? 'ogg'
+              : mt.includes('wav') ? 'wav'
               : 'webm';
     const filename = 'audio.' + ext;
     const boundary = '----FormBoundary' + Math.random().toString(36).slice(2);
@@ -76,21 +128,21 @@ exports.handler = async function(event) {
     if (!response.ok) {
       return {
         statusCode: response.status,
-        headers: { 'Access-Control-Allow-Origin': '*' },
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
         body: JSON.stringify({ error: data.error?.message || 'Groq API error' }),
       };
     }
 
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
       body: JSON.stringify({ text: data.text }),
     };
 
   } catch (e) {
     return {
       statusCode: 500,
-      headers: { 'Access-Control-Allow-Origin': '*' },
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
       body: JSON.stringify({ error: e.message }),
     };
   }
