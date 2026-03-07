@@ -1,23 +1,32 @@
 [build]
   functions = "netlify/functions"
 
+# ─── Переменные окружения — добавить в Netlify Dashboard → Site Settings → Env Variables ───
+# ANTHROPIC_API_KEY   = sk-ant-...
+# GROQ_API_KEY        = gsk_...
+# SUPABASE_URL        = https://kkaixwmqclsudabgofcf.supabase.co
+# SUPABASE_ANON_KEY   = eyJ... (публичный anon key)
+
 [[headers]]
   for = "/*"
   [headers.values]
-    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Origin = "https://myfinanceai.netlify.app"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
 
-# Mobile → finance-mobile.html
+# Mobile + iPad → finance-mobile.html
 [[redirects]]
   from = "/finance.html"
   to = "/finance-mobile.html"
   status = 200
-  conditions = {UserAgent = ["(?i).*(?:iphone|android|mobile|ipod|blackberry|windows phone|iemobile).*"]}
+  conditions = {UserAgent = ["(?i).*(?:iphone|android|mobile|ipod|blackberry|windows phone|iemobile|ipad|tablet).*"]}
 
 [[redirects]]
   from = "/dashboard"
   to = "/finance-mobile.html"
   status = 200
-  conditions = {UserAgent = ["(?i).*(?:iphone|android|mobile|ipod|blackberry|windows phone|iemobile).*"]}
+  conditions = {UserAgent = ["(?i).*(?:iphone|android|mobile|ipod|blackberry|windows phone|iemobile|ipad|tablet).*"]}
 
 [[redirects]]
   from = "/dashboard"

@@ -553,6 +553,28 @@ const SUPABASE_URL = 'https://kkaixwmqclsudabgofcf.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrYWl4d21xY2xzdWRhYmdvZmNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1MDc4ODcsImV4cCI6MjA4ODA4Mzg4N30.zD9M-Tthd_FBdcrXuOukEdxuWnIaR0yWfm0CnWyuhb0';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ── Post-login redirect: /dashboard if has projects, else /onboarding ──
+async function redirectAfterLogin() {
+  try {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) { window.location.href = '/onboarding'; return; }
+    const { data: projects } = await sb.from('projects').select('id,name,emoji,color').eq('user_id', user.id).limit(1);
+    if (projects && projects.length > 0) {
+      const p = projects[0];
+      localStorage.setItem('active_project_id',    p.id);
+      localStorage.setItem('active_project_name',  p.name || '');
+      localStorage.setItem('active_project_emoji', p.emoji || '💼');
+      const now = new Date();
+      sessionStorage.setItem('active_month', now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0'));
+      window.location.href = '/dashboard';
+    } else {
+      window.location.href = '/onboarding';
+    }
+  } catch(e) {
+    window.location.href = '/onboarding';
+  }
+}
+
 // ── Tab switcher ──────────────────────────────────
 function switchTab(tab) {
   const tabs = document.querySelectorAll('.auth-tab');
@@ -606,7 +628,7 @@ document.querySelector('#login-form .btn-primary').addEventListener('click', asy
   const { error } = await sb.auth.signInWithPassword({ email, password });
   setLoading(btn, false);
   if (error) { showError(error.message === 'Invalid login credentials' ? 'Неверный email или пароль' : error.message); return; }
-  window.location.href = '/onboarding';
+  await redirectAfterLogin();
 });
 
 // ── REGISTER ──────────────────────────────────────
@@ -697,7 +719,7 @@ document.getElementById('btn-forgot-send').addEventListener('click', async () =>
 // ── AUTO-REDIRECT if already logged in ───────────
 sb.auth.getSession().then(({ data }) => {
   if (data.session && !window.location.hash.includes('reset')) {
-    window.location.href = '/onboarding';
+    redirectAfterLogin();
   }
 });
 
@@ -723,12 +745,15 @@ if (window.location.hash === '#reset') {
   document.getElementById('btn-set-password').addEventListener('click', async () => {
     const p1 = document.getElementById('new-pass-1').value;
     const p2 = document.getElementById('new-pass-2').value;
-    if (p1 !== p2) { alert('Пароли не совпадают'); return; }
-    if (p1.length < 6) { alert('Минимум 6 символов'); return; }
+    const btn = document.getElementById('btn-set-password');
+    // reuse showError from auth page
+    if (p1 !== p2) { showError('Пароли не совпадают'); return; }
+    if (p1.length < 6) { showError('Минимум 6 символов'); return; }
+    btn.disabled = true; btn.textContent = 'Сохраняем...';
     const { error } = await sb.auth.updateUser({ password: p1 });
-    if (error) { alert('Ошибка: ' + error.message); return; }
-    alert('Пароль изменён! Войди с новым паролем.');
-    window.location.href = '/login';
+    if (error) { btn.disabled = false; btn.textContent = 'Сохранить пароль →'; showError('Ошибка: ' + error.message); return; }
+    showSuccess('✓ Пароль изменён! Перенаправляем на вход...');
+    setTimeout(() => { window.location.href = '/login'; }, 2000);
   });
 }
 </script>

@@ -186,9 +186,9 @@ let _user = null;
   const { data: projects } = await _SB.from('projects').select('id,name,emoji,color').eq('user_id', _user.id).limit(1);
   if (projects && projects.length > 0) {
     const p = projects[0];
-    sessionStorage.setItem('active_project_id',    p.id);
-    sessionStorage.setItem('active_project_name',  p.name || '');
-    sessionStorage.setItem('active_project_emoji', p.emoji || '💼');
+    localStorage.setItem('active_project_id',    p.id);
+    localStorage.setItem('active_project_name',  p.name || '');
+    localStorage.setItem('active_project_emoji', p.emoji || '💼');
     const now = new Date();
     sessionStorage.setItem('active_month', now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0'));
     window.location.href = '/dashboard';
@@ -247,38 +247,57 @@ document.getElementById('ob-submit').onclick = async () => {
   btn.disabled = true;
   btn.textContent = 'Создаём...';
 
-  const { data, error } = await _SB.from('projects').insert({
-    user_id: _user.id, name, emoji: selEmoji, color: selColor,
-  }).select().single();
+  const withTimeout = (promise, ms) => Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Превышено время ожидания. Проверь соединение.')), ms))
+  ]);
 
-  if (error) {
+  let data;
+  try {
+    const result = await withTimeout(
+      _SB.from('projects').insert({
+        user_id: _user.id, name, emoji: selEmoji, color: selColor,
+      }).select().single(),
+      10000
+    );
+    if (result.error) throw result.error;
+    data = result.data;
+  } catch(e) {
     btn.disabled = false;
     btn.textContent = 'Создать проект и начать →';
-    errEl.textContent = 'Ошибка: ' + error.message;
+    errEl.textContent = 'Ошибка: ' + e.message;
     errEl.style.display = 'block';
     return;
   }
 
   const defaultData = {
-    transactions: [], accounts: {
+    transactions: [],
+    accounts: {
       personal_card: { name: '💳 Личная карта', balance: 0, currency: 'RUB', color: '#6ee7b7' },
       cash:          { name: '💵 Наличные',     balance: 0, currency: 'RUB', color: '#a78bfa' },
-    }, accOrder: ['personal_card', 'cash'],
+    },
+    accOrder: ['personal_card', 'cash'],
     funds: {
       cushion: { name: 'Подушка безопасности', balance: 0, currency: 'RUB', icon: '🛡️', color: '#6ee7b7' },
       savings:  { name: 'Накопительный счёт',  balance: 0, currency: 'RUB', icon: '💵', color: '#93c5fd' },
-    }, fundHistory: [], directions: {}, dirCategories: {}, partnerPayments: {},
-    rates: { SAR: 20.5, USDT: 77, USD: 90 }, enabledCurrencies: ['RUB','USD'], theme: 'dark', lang: 'ru',
+    },
+    fundHistory: [], directions: {}, dirCategories: {}, partnerPayments: {},
+    rates: { SAR: 20.5, USDT: 90, USD: 90, source: 'fallback', updatedAt: null },
+    enabledCurrencies: ['RUB', 'USD'],
+    theme: 'dark', lang: 'ru',
+    dirOrder: null, fundOrder: null, tabOrder: null,
   };
 
   const uid = _user.id + '_' + data.id;
-  await _SB.from('user_data').insert({
-    user_id: uid, project_id: data.id, data: defaultData, updated_at: new Date().toISOString()
-  });
+  const { error: dataErr } = await _SB.from('user_data').upsert(
+    { user_id: uid, project_id: data.id, data: defaultData, updated_at: new Date().toISOString() },
+    { onConflict: 'user_id' }
+  );
+  if (dataErr) console.warn('user_data upsert error:', dataErr.message);
 
-  sessionStorage.setItem('active_project_id',    data.id);
-  sessionStorage.setItem('active_project_name',  name);
-  sessionStorage.setItem('active_project_emoji', selEmoji);
+  localStorage.setItem('active_project_id',    data.id);
+  localStorage.setItem('active_project_name',  name);
+  localStorage.setItem('active_project_emoji', selEmoji);
   const now = new Date();
   sessionStorage.setItem('active_month', now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0'));
   window.location.href = '/dashboard';

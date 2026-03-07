@@ -4,50 +4,71 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (async () => {
-  const hash = window.location.hash;
+  const SUPABASE_URL = 'https://kkaixwmqclsudabgofcf.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrYWl4d21xY2xzdWRhYmdvZmNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1MDc4ODcsImV4cCI6MjA4ODA4Mzg4N30.zD9M-Tthd_FBdcrXuOukEdxuWnIaR0yWfm0CnWyuhb0';
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const hash   = window.location.hash;
   const params = new URLSearchParams(window.location.search);
 
-  // Error
-  if (hash.includes("error=") || params.get("error")) {
-    window.location.href = "auth-mockup.html";
+  // Error from OAuth provider
+  if (hash.includes('error=') || params.get('error')) {
+    window.location.href = '/login';
     return;
   }
 
-  // Hash flow with access_token
-  if (hash.includes("access_token")) {
+  // Hash flow (access_token) — email confirm or magic link
+  if (hash.includes('access_token')) {
     const type = (hash.match(/[#&]type=([^&]*)/) || [])[1];
-
-    if (type === "recovery") {
-      // Store hash so reset-password.html can process it
-      sessionStorage.setItem("recovery_hash", hash);
-      window.location.href = "reset-password.html";
+    if (type === 'recovery') {
+      sessionStorage.setItem('recovery_hash', hash);
+      window.location.href = '/reset-password';
       return;
     }
-
-    // Email confirm or login
-    const sb = supabase.createClient(
-      "https://kkaixwmqclsudabgofcf.supabase.co",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrYWl4d21xY2xzdWRhYmdvZmNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1MDc4ODcsImV4cCI6MjA4ODA4Mzg4N30.zD9M-Tthd_FBdcrXuOukEdxuWnIaR0yWfm0CnWyuhb0"
-    );
-    await sb.auth.getSession();
-    window.location.href = "onboarding";
+    try {
+      await sb.auth.getSession();
+    } catch(e) {
+      console.error('getSession error:', e);
+    }
+    // Check if user already has projects — redirect to dashboard, not onboarding
+    try {
+      const { data: { user } } = await sb.auth.getUser();
+      if (user) {
+        const { data: projects } = await sb.from('projects').select('id').eq('user_id', user.id).limit(1);
+        if (projects && projects.length > 0) {
+          window.location.href = '/dashboard';
+          return;
+        }
+      }
+    } catch(e) {
+      console.warn('project check error:', e);
+    }
+    window.location.href = '/onboarding';
     return;
   }
 
-  // PKCE code flow
-  const code = params.get("code");
+  // PKCE code flow — Google OAuth or email link
+  const code = params.get('code');
   if (code) {
-    const sb = supabase.createClient(
-      "https://kkaixwmqclsudabgofcf.supabase.co",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrYWl4d21xY2xzdWRhYmdvZmNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1MDc4ODcsImV4cCI6MjA4ODA4Mzg4N30.zD9M-Tthd_FBdcrXuOukEdxuWnIaR0yWfm0CnWyuhb0"
-    );
-    await sb.auth.exchangeCodeForSession(code);
-    const type = params.get("type");
-    window.location.href = type === "recovery" ? "reset-password.html" : "onboarding";
+    try {
+      const { error } = await sb.auth.exchangeCodeForSession(code);
+      if (error) {
+        console.error('exchangeCodeForSession error:', error);
+        window.location.href = '/login';
+        return;
+      }
+    } catch(e) {
+      console.error('exchangeCodeForSession exception:', e);
+      window.location.href = '/login';
+      return;
+    }
+    const type = params.get('type');
+    window.location.href = type === 'recovery' ? '/reset-password' : '/onboarding';
     return;
   }
 
-  window.location.href = "auth-mockup.html";
+  // No auth params — go to login
+  window.location.href = '/login';
 })();
 </script>
 </head>
