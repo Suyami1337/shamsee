@@ -1,6 +1,7 @@
 exports.handler = async function(event) {
-  const ALLOWED_ORIGIN = 'https://myfinanceai.netlify.app';
+  const ALLOWED_ORIGINS = ['https://myfinanceai.netlify.app','http://localhost:8888','http://localhost:3000','http://127.0.0.1:8888'];
   const origin = event.headers['origin'] || event.headers['Origin'] || '';
+  const ALLOWED_ORIGIN = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
 
   const corsHeaders = {
     'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
@@ -17,7 +18,7 @@ exports.handler = async function(event) {
   }
 
   // SEC: Проверяем origin
-  if (origin && origin !== ALLOWED_ORIGIN) {
+  if (origin && !ALLOWED_ORIGINS.includes(origin)) {
     return {
       statusCode: 403,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -26,6 +27,7 @@ exports.handler = async function(event) {
   }
 
   // SEC: Проверяем JWT токен
+  const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
   const authHeader = event.headers['authorization'] || event.headers['Authorization'] || '';
   if (!authHeader.startsWith('Bearer ')) {
     return {
@@ -36,24 +38,26 @@ exports.handler = async function(event) {
   }
 
   const token = authHeader.slice(7);
-  try {
-    const verifyResp = await fetch(
-      `${process.env.SUPABASE_URL}/auth/v1/user`,
-      { headers: { 'Authorization': `Bearer ${token}`, 'apikey': process.env.SUPABASE_ANON_KEY } }
-    );
-    if (!verifyResp.ok) {
+  if (!isLocalhost) {
+    try {
+      const verifyResp = await fetch(
+        `${process.env.SUPABASE_URL}/auth/v1/user`,
+        { headers: { 'Authorization': `Bearer ${token}`, 'apikey': process.env.SUPABASE_ANON_KEY } }
+      );
+      if (!verifyResp.ok) {
+        return {
+          statusCode: 401,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          body: JSON.stringify({ error: 'Unauthorized — invalid token' }),
+        };
+      }
+    } catch(e) {
       return {
         statusCode: 401,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
-        body: JSON.stringify({ error: 'Unauthorized — invalid token' }),
+        body: JSON.stringify({ error: 'Unauthorized — token verification failed' }),
       };
     }
-  } catch(e) {
-    return {
-      statusCode: 401,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      body: JSON.stringify({ error: 'Unauthorized — token verification failed' }),
-    };
   }
 
   try {

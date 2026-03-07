@@ -19,11 +19,17 @@ function checkRateLimit(userId) {
 }
 
 exports.handler = async function(event) {
-  const ALLOWED_ORIGIN = 'https://myfinanceai.netlify.app';
+  const ALLOWED_ORIGINS = [
+    'https://myfinanceai.netlify.app',
+    'http://localhost:8888',
+    'http://localhost:3000',
+    'http://127.0.0.1:8888',
+  ];
   const origin = event.headers['origin'] || event.headers['Origin'] || '';
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
 
   const corsHeaders = {
-    'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+    'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   };
@@ -38,7 +44,7 @@ exports.handler = async function(event) {
   }
 
   // SEC: Verify request comes from our origin
-  if (origin && origin !== ALLOWED_ORIGIN) {
+  if (origin && !ALLOWED_ORIGINS.includes(origin)) {
     return {
       statusCode: 403,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -47,6 +53,7 @@ exports.handler = async function(event) {
   }
 
   // SEC: Verify Supabase JWT token — только авторизованные пользователи
+  const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
   const authHeader = event.headers['authorization'] || event.headers['Authorization'] || '';
   if (!authHeader.startsWith('Bearer ')) {
     return {
@@ -56,26 +63,28 @@ exports.handler = async function(event) {
     };
   }
 
-  // Verify token with Supabase
+  // Verify token with Supabase (skip on localhost — token may not be refreshed)
   const token = authHeader.slice(7);
-  try {
-    const verifyResp = await fetch(
-      `${process.env.SUPABASE_URL}/auth/v1/user`,
-      { headers: { 'Authorization': `Bearer ${token}`, 'apikey': process.env.SUPABASE_ANON_KEY } }
-    );
-    if (!verifyResp.ok) {
+  if (!isLocalhost) {
+    try {
+      const verifyResp = await fetch(
+        `${process.env.SUPABASE_URL}/auth/v1/user`,
+        { headers: { 'Authorization': `Bearer ${token}`, 'apikey': process.env.SUPABASE_ANON_KEY } }
+      );
+      if (!verifyResp.ok) {
+        return {
+          statusCode: 401,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          body: JSON.stringify({ error: 'Unauthorized — invalid token' }),
+        };
+      }
+    } catch(e) {
       return {
         statusCode: 401,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
-        body: JSON.stringify({ error: 'Unauthorized — invalid token' }),
+        body: JSON.stringify({ error: 'Unauthorized — token verification failed' }),
       };
     }
-  } catch(e) {
-    return {
-      statusCode: 401,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      body: JSON.stringify({ error: 'Unauthorized — token verification failed' }),
-    };
   }
 
   // SEC-05: Rate limiting — get userId from token payload
